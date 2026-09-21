@@ -1,0 +1,1392 @@
+<script>
+(function () {
+  'use strict';
+
+  // =====================================================================
+  // 定数
+  // =====================================================================
+  var API_BASE = 'https://www.googleapis.com/calendar/v3';
+  var HEADERS = ['表示名', '正規のカレンダー名', 'メールアドレス / カレンダーID', 'アクセス権限', 'カラーコード'];
+  var STATUS_HEADER = 'ステータス';
+  var MAX_ATTEMPTS = 5;
+  var HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+  // =====================================================================
+  // ユーティリティ
+  // =====================================================================
+  function $(id) { return document.getElementById(id); }
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined && text !== null) node.textContent = text;
+    return node;
+  }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+  function normalizeColor(value) {
+    var v = String(value || '').trim().toLowerCase();
+    if (!v) return '';
+    if (/^[0-9a-f]{6}$/.test(v)) v = '#' + v;
+    return v;
+  }
+  function isValidId(value) {
+    var v = String(value || '').trim();
+    return v.length > 3 && v.indexOf('@') > 0 && !/\s/.test(v);
+  }
+  function todayStamp() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
+  }
+
+  /**
+   * 色見本（type=color）と HEX テキスト入力を連動させる。
+   * onChange には正規化済みの色コード（不正なら null）を渡す。
+   */
+  function bindColorPair(swatch, hex, initial, onChange) {
+    var v = normalizeColor(initial);
+    swatch.value = HEX_COLOR.test(v) ? v : '#ffffff';
+    hex.value = v;
+    swatch.addEventListener('input', function () {
+      hex.value = swatch.value.toLowerCase();
+      hex.classList.remove('is-invalid');
+      onChange(hex.value);
+    });
+    hex.addEventListener('input', function () {
+      var c = normalizeColor(hex.value);
+      if (!c) { hex.classList.remove('is-invalid'); onChange(''); return; }
+      if (HEX_COLOR.test(c)) { hex.classList.remove('is-invalid'); swatch.value = c; onChange(c); }
+      else { hex.classList.add('is-invalid'); onChange(null); }
+    });
+    hex.addEventListener('blur', function () {
+      var c = normalizeColor(hex.value);
+      if (HEX_COLOR.test(c)) hex.value = c;
+    });
+  }
+
+  var COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+  var CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>';
+
+  function copyButton(getText) {
+    var btn = el('button', 'copy-btn');
+    btn.type = 'button';
+    btn.title = '色コードをコピー';
+    btn.setAttribute('aria-label', '色コードをコピー');
+    btn.innerHTML = COPY_ICON; // 静的なSVG文字列のみ
+    btn.addEventListener('click', function () {
+      var text = getText();
+      if (!text) return;
+      copyText(text).then(function () {
+        btn.innerHTML = CHECK_ICON;
+        btn.classList.add('is-done');
+        setTimeout(function () { btn.innerHTML = COPY_ICON; btn.classList.remove('is-done'); }, 1500);
+      }).catch(function () { showMessage('クリップボードにコピーできませんでした。', 'error'); });
+    });
+    return btn;
+  }
+
+  /** API の accessRole を利用者向けの表記にする */
+  function roleLabel(role) {
+    switch (role) {
+      case 'owner': return 'オーナー';
+      case 'writer': return '編集可';
+      case 'reader': return '閲覧のみ';
+      case 'freeBusyReader': return '予定の有無のみ';
+      default: return role || '';
+    }
+  }
+
+  function showMessage(text, kind) {
+    var box = $('global-message');
+    box.textContent = text;
+    box.className = 'message' + (kind ? ' is-' + kind : '');
+    box.hidden = !text;
+  }
+
+  // =====================================================================
+  // 認証（ブラウザー側 OAuth 2.0 インプリシットフロー）
+  // script.google.com のアカウント判定に依存せず、Google のアカウント選択画面で
+  // 選んだアカウントのトークンを取得する。トークンはメモリにだけ保持する。
+  // =====================================================================
+  var CLIENT_ID = String(window.__CLIENT_ID__ || '');
+  var APP_URL = String(window.__APP_URL__ || '');
+  var SCOPE = 'https://www.googleapis.com/auth/calendar.calendarlist';
+  var STATE_KEY = 'calendar-bulk-registration.oauth-state';
+  var auth = { token: '', expiresAt: 0 };
+  var token = '';
+
+  function randomString() {
+    var bytes = new Uint8Array(16);
+    if (!window.crypto || !window.crypto.getRandomValues) throw new Error('安全な乱数を使用できないためログインを開始できません。');
+    window.crypto.getRandomValues(bytes);
+    return Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  }
+  function storageGet(key) { try { return window.localStorage.getItem(key); } catch (e) { return null; } }
+  function storageSet(key, value) { try { window.localStorage.setItem(key, value); } catch (e) { /* 利用不可でも続行 */ } }
+  function storageRemove(key) { try { window.localStorage.removeItem(key); } catch (e) { /* 同上 */ } }
+
+  function parseFragment(hash) {
+    var out = {};
+    String(hash || '').replace(/^#/, '').split('&').forEach(function (pair) {
+      if (!pair) return;
+      var i = pair.indexOf('=');
+      var k = decodeURIComponent(i < 0 ? pair : pair.slice(0, i));
+      var v = decodeURIComponent(i < 0 ? '' : pair.slice(i + 1).replace(/\+/g, ' '));
+      out[k] = v;
+    });
+    return out;
+  }
+
+  /** Google の認可画面へ移動する。常にアカウント選択を出す。 */
+  function startLogin(loginHint) {
+    if (!CLIENT_ID || !APP_URL) { showMessage('OAuth クライアントが設定されていません。配信者に連絡してください。', 'error'); return; }
+    var state;
+    try { state = randomString(); } catch (e) { showMessage(e.message, 'error'); return; }
+    storageSet(STATE_KEY, state);
+    if (storageGet(STATE_KEY) !== state) { showMessage('ログイン状態を保存できません。ブラウザーの保存設定を確認してください。', 'error'); return; }
+    var params = {
+      client_id: CLIENT_ID,
+      redirect_uri: APP_URL,
+      response_type: 'token',
+      scope: SCOPE,
+      include_granted_scopes: 'false',
+      prompt: 'select_account',
+      state: state
+    };
+    if (loginHint) params.login_hint = loginHint;
+    var qs = Object.keys(params).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+    var url = 'https://accounts.google.com/o/oauth2/v2/auth?' + qs;
+    // サンドボックス化された iframe からは最上位ウィンドウのリンク遷移で移動する
+    var a = document.createElement('a');
+    a.href = url;
+    a.target = '_top';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  function setLoggedIn(accessToken, expiresInSeconds) {
+    token = accessToken;
+    auth.token = accessToken;
+    auth.expiresAt = Date.now() + Math.max(60, Number(expiresInSeconds) || 3600) * 1000;
+  }
+
+  function clearLogin() {
+    token = '';
+    auth.token = '';
+    auth.expiresAt = 0;
+  }
+
+  function isLoggedIn() { return !!auth.token && Date.now() < auth.expiresAt; }
+  function secondsLeft() { return Math.max(0, Math.floor((auth.expiresAt - Date.now()) / 1000)); }
+
+  /** トークンがこのアプリ向けに発行されたものか確認する（トークン差し替え対策） */
+  function verifyToken(accessToken) {
+    return fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(accessToken))
+      .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+      .then(function (r) {
+        if (!r.ok) throw new Error('トークンを検証できませんでした（' + (r.data && r.data.error_description || r.data && r.data.error || 'invalid') + '）');
+        if (r.data.aud !== CLIENT_ID) throw new Error('このアプリ向けのトークンではありません。');
+        if (!String(r.data.scope || '').split(' ').includes(SCOPE)) throw new Error('必要なカレンダー権限が許可されていません。');
+        return r.data;
+      });
+  }
+
+  function revokeToken(accessToken) {
+    if (!accessToken) return Promise.resolve(true);
+    // Google の失効エンドポイントは CORS 非対応。フォームを別フレームへ POST して
+    // アプリ画面を維持する（応答は読み取れないため、失効の成否は判定できない）。
+    var frame;
+    var form;
+    try {
+      frame = document.createElement('iframe');
+      frame.name = 'oauth-revoke-' + randomString();
+      frame.hidden = true;
+      form = document.createElement('form');
+      form.method = 'POST';
+      form.action = 'https://oauth2.googleapis.com/revoke';
+      form.target = frame.name;
+      form.hidden = true;
+      var field = document.createElement('input');
+      field.type = 'hidden';
+      field.name = 'token';
+      field.value = accessToken;
+      form.appendChild(field);
+      document.body.appendChild(frame);
+      document.body.appendChild(form);
+      form.submit();
+      setTimeout(function () { form.remove(); frame.remove(); }, 10000);
+      return Promise.resolve(true);
+    } catch (e) {
+      if (frame) frame.remove();
+      if (form) form.remove();
+      return Promise.resolve(false);
+    }
+  }
+
+  /** 表題欄の「頁」に、いま開いている面を書く */
+  function setTitleblockPage(text) {
+    var cell = $('tb-page');
+    if (cell) cell.textContent = text;
+  }
+
+  function showLoginRequired(message) {
+    clearLogin();
+    setTitleblockPage('表紙');
+    $('panel-login').hidden = false;
+    $('app-tabs').hidden = true;
+    $('panel-export').hidden = true;
+    $('panel-import').hidden = true;
+    $('app-footer').hidden = true;
+    $('account-menu').hidden = true;
+    $('account-menu').open = false;
+    $('account-email').textContent = '未ログイン';
+    if (message) showMessage(message, 'error');
+  }
+
+  function showApp() {
+    $('panel-login').hidden = true;
+    $('app-tabs').hidden = false;
+    $('app-footer').hidden = false;
+    $('account-menu').hidden = false;
+    switchTab('export');
+  }
+
+  function ApiError(status, reason, message) {
+    this.name = 'ApiError';
+    this.status = status;
+    this.reason = reason || '';
+    this.message = message || ('HTTP ' + status);
+  }
+  ApiError.prototype = Object.create(Error.prototype);
+
+  // =====================================================================
+  // Calendar API（ブラウザーから直接呼び出し）
+  // =====================================================================
+  function isRateLimited(err) {
+    if (err.status === 429) return true;
+    if (err.status !== 403) return false;
+    return /rateLimitExceeded|userRateLimitExceeded|quotaExceeded/i.test(err.reason);
+  }
+
+  /**
+   * Calendar API を呼ぶ。401 は1回だけトークン再取得、レート制限は指数バックオフ。
+   * @param {string} method
+   * @param {string} path  '/users/me/calendarList' など
+   * @param {{query?: Object, body?: Object}} [options]
+   */
+  function request(method, path, options) {
+    options = options || {};
+    var url = API_BASE + path;
+    var qs = [];
+    Object.keys(options.query || {}).forEach(function (k) {
+      var v = options.query[k];
+      if (v === undefined || v === null || v === '') return;
+      qs.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+    });
+    if (qs.length) url += '?' + qs.join('&');
+
+    var attempt = 0;
+
+    function once() {
+      attempt++;
+      var init = { method: method, headers: { Authorization: 'Bearer ' + token } };
+      if (options.body !== undefined) {
+        init.headers['Content-Type'] = 'application/json';
+        init.body = JSON.stringify(options.body);
+      }
+      return fetch(url, init).then(function (res) {
+        if (res.status === 204) return null;
+        return res.text().then(function (text) {
+          var data = null;
+          try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+          if (res.ok) return data;
+          var reason = '';
+          var message = '';
+          if (data && data.error) {
+            message = data.error.message || '';
+            if (data.error.errors && data.error.errors.length) reason = data.error.errors[0].reason || '';
+            if (!reason && data.error.status) reason = data.error.status;
+          }
+          throw new ApiError(res.status, reason, message || ('HTTP ' + res.status));
+        });
+      }).catch(function (err) {
+        if (err instanceof ApiError) {
+          if (err.status === 401) {
+            showLoginRequired('ログインの有効期限が切れました。もう一度ログインしてください。');
+            throw err;
+          }
+          if (isRateLimited(err) && attempt < MAX_ATTEMPTS) {
+            var wait = Math.pow(2, attempt) * 1000;
+            return sleep(wait).then(once);
+          }
+          throw err;
+        }
+        // ネットワークエラー等
+        if (attempt < MAX_ATTEMPTS) return sleep(Math.pow(2, attempt) * 1000).then(once);
+        throw new ApiError(0, 'network', String(err && err.message || err));
+      });
+    }
+    return once();
+  }
+
+  function listAllCalendars() {
+    var items = [];
+    function page(pageToken) {
+      return request('GET', '/users/me/calendarList', {
+        query: { maxResults: 250, showHidden: true, pageToken: pageToken }
+      }).then(function (data) {
+        if (data && data.items) items = items.concat(data.items);
+        if (data && data.nextPageToken) return page(data.nextPageToken);
+        return items;
+      });
+    }
+    return page(undefined);
+  }
+
+  function insertCalendar(resource) {
+    return request('POST', '/users/me/calendarList', { query: { colorRgbFormat: true }, body: resource });
+  }
+
+  function patchCalendar(id, resource) {
+    return request('PATCH', '/users/me/calendarList/' + encodeURIComponent(id), { query: { colorRgbFormat: true }, body: resource });
+  }
+
+  // =====================================================================
+  // CSV / TSV
+  // =====================================================================
+  function detectDelimiter(text) {
+    var head = text.split(/\r?\n/).slice(0, 5).join('\n');
+    var tabs = (head.match(/\t/g) || []).length;
+    var commas = (head.match(/,/g) || []).length;
+    return tabs >= commas ? '\t' : ',';
+  }
+
+  function parseDelimited(text, delimiter) {
+    var rows = [];
+    var row = [];
+    var field = '';
+    var inQuotes = false;
+    var i = 0;
+    while (i < text.length) {
+      var c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+          inQuotes = false; i++; continue;
+        }
+        field += c; i++; continue;
+      }
+      if (c === '"') { inQuotes = true; i++; continue; }
+      if (c === delimiter) { row.push(field); field = ''; i++; continue; }
+      if (c === '\r') { i++; continue; }
+      if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+      field += c; i++;
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (v) { return String(v).trim() !== ''; }); });
+  }
+
+  function spreadsheetSafe(value) {
+    var s = value === null || value === undefined ? '' : String(value);
+    // CSV/TSVを表計算ソフトで開いたとき、外部由来の名前を数式として実行させない。
+    if (/^'|^[\u0000-\u0020]*[=+\-@]/.test(s)) return "'" + s;
+    return s;
+  }
+  function restoreSpreadsheetSafe(value) {
+    var s = String(value || '');
+    return /^'(?:'|[\u0000-\u0020]*[=+\-@])/.test(s) ? s.slice(1) : s;
+  }
+  function csvEscape(value) {
+    var s = spreadsheetSafe(value);
+    if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  function toCsv(rows) {
+    return '\uFEFF' + rows.map(function (r) { return r.map(csvEscape).join(','); }).join('\r\n') + '\r\n';
+  }
+  function toTsv(rows) {
+    return rows.map(function (r) {
+      return r.map(function (v) { return spreadsheetSafe(v).replace(/[\t\r\n]/g, ' '); }).join('\t');
+    }).join('\n');
+  }
+
+  /** ArrayBuffer を文字列にする。UTF-8（BOM有無）→ Shift_JIS の順で試す。 */
+  function decodeBytes(buffer) {
+    var bytes = new Uint8Array(buffer);
+    if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+      return new TextDecoder('utf-8').decode(bytes.subarray(3));
+    }
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch (e) {
+      try { return new TextDecoder('shift_jis').decode(bytes); } catch (e2) { return new TextDecoder('utf-8').decode(bytes); }
+    }
+  }
+
+  function downloadText(filename, text, mime) {
+    var blob = new Blob([text], { type: mime || 'text/plain' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function () { return legacyCopy(text); });
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    if (!ok) throw new Error('クリップボードにコピーできませんでした。');
+  }
+
+  // =====================================================================
+  // 状態
+  // =====================================================================
+  var state = {
+    calendars: [],          // API の calendarList items
+    byId: {},               // id -> item
+    myEmail: '',
+    exportRows: [],         // {key, id, summary, accessRole, displayName, color, selected, primary, hidden, manual}
+    importRows: [],         // {line, displayName, summary, id, accessRole, color, valid, error, selected, action, body, status, statusText}
+    running: false,
+    cancelRequested: false,
+    importSourceName: ''
+  };
+
+  // =====================================================================
+  // 読み込み
+  // =====================================================================
+  function loadCalendars() {
+    showMessage('');
+    $('account-email').textContent = '確認中…';
+    $('export-body').innerHTML = '';
+    $('export-body').appendChild(emptyRow(6, '読み込み中…'));
+    return listAllCalendars().then(function (items) {
+      state.calendars = items;
+      state.byId = {};
+      items.forEach(function (it) { state.byId[it.id] = it; });
+      var primary = items.filter(function (it) { return it.primary; })[0];
+      state.myEmail = primary ? primary.id : '';
+      $('account-email').textContent = state.myEmail || '（主カレンダーが見つかりません）';
+      buildExportRows();
+      renderExport();
+      // 最初にやることは自分の名前を決めること。空なら 01 の欄にフォーカスを置く
+      var me = primaryRow();
+      if (me && !me.displayName && !$('panel-export').hidden) $('self-name').focus({ preventScroll: true });
+      if (state.importRows.length) { computeImportActions(); renderImport(); }
+    }).catch(function (err) {
+      $('account-email').textContent = '取得失敗';
+      $('export-body').innerHTML = '';
+      $('export-body').appendChild(emptyRow(6, 'カレンダーリストを取得できませんでした。'));
+      showMessage('カレンダーリストの取得に失敗しました: ' + describeError(err), 'error');
+    });
+  }
+
+  function describeError(err) {
+    if (err instanceof ApiError) {
+      if (err.status === 404) return '見つからない、または共有されていません';
+      if (err.status === 403 && !isRateLimited(err)) return '権限がありません（' + (err.message || '403') + '）';
+      if (isRateLimited(err)) return 'API呼び出し回数の制限に達しました。しばらく待って再試行してください';
+      if (err.status === 400) return 'IDまたは値が不正です（' + (err.message || '400') + '）';
+      if (err.status === 401) return 'ログインの有効期限が切れました。もう一度ログインしてください';
+      if (err.status === 0) return '通信エラー（' + err.message + '）';
+      return (err.message || ('HTTP ' + err.status));
+    }
+    return String(err && err.message || err);
+  }
+
+  function emptyRow(colspan, text) {
+    var tr = el('tr');
+    var td = el('td', 'empty', text);
+    td.colSpan = colspan;
+    tr.appendChild(td);
+    return tr;
+  }
+
+  // =====================================================================
+  // エクスポート
+  // =====================================================================
+  function buildExportRows() {
+    var manual = state.exportRows.filter(function (r) { return r.manual; });
+    var previous = {};
+    state.exportRows.forEach(function (r) { previous[r.id] = r; });
+    var rows = state.calendars.map(function (it) {
+      var prev = previous[it.id];
+      var isPrimary = !!it.primary;
+      var effective = it.summaryOverride || it.summary || '';
+      return {
+        key: it.id,
+        id: it.id,
+        summary: it.summary || '',
+        accessRole: it.accessRole || '',
+        displayName: prev ? prev.displayName : (isPrimary ? '' : effective),
+        color: prev ? prev.color : normalizeColor(it.backgroundColor || ''),
+        selected: prev ? prev.selected : (isPrimary || (it.accessRole !== 'owner' && !it.hidden)),
+        primary: isPrimary,
+        owner: it.accessRole === 'owner',
+        hidden: !!it.hidden,
+        manual: false
+      };
+    });
+    state.exportRows = rows.concat(manual.filter(function (m) { return !state.byId[m.id]; }));
+  }
+
+  function visibleExportRows() {
+    var includeOwner = $('export-include-owner').checked;
+    var includeHidden = $('export-include-hidden').checked;
+    var q = $('export-search').value.trim().toLowerCase();
+    return state.exportRows.filter(function (r) {
+      if (r.primary) return false;
+      if (r.manual) return true;
+      if (!includeOwner && r.owner) return false;
+      if (!includeHidden && r.hidden) return false;
+      if (q) {
+        var hay = (r.displayName + ' ' + r.summary + ' ' + r.id).toLowerCase();
+        if (hay.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function primaryRow() {
+    return state.exportRows.filter(function (r) { return r.primary; })[0] || null;
+  }
+
+  /** 01 のフォームを主カレンダーの行と同期する（編集はフォーム側だけで行う） */
+  function renderSelf() {
+    var me = primaryRow();
+    var has = !!me;
+    ['self-name', 'self-swatch', 'self-color', 'self-include'].forEach(function (id) { $(id).disabled = !has; });
+    $('self-id').textContent = has ? me.id : '（主カレンダーが見つかりません）';
+    if (!has) return;
+    if ($('self-name').value !== me.displayName) $('self-name').value = me.displayName;
+    // 入力中の欄は上書きしない
+    if (document.activeElement !== $('self-color') && normalizeColor($('self-color').value) !== me.color) {
+      $('self-color').value = me.color;
+      $('self-swatch').value = HEX_COLOR.test(me.color) ? me.color : '#ffffff';
+    }
+    $('self-include').checked = me.selected;
+    if (me.displayName.trim()) clearSelfNameError();
+  }
+
+  function showSelfNameError() {
+    $('self-name').classList.add('is-invalid');
+    $('self-name').setAttribute('aria-invalid', 'true');
+    $('self-name-error').hidden = false;
+  }
+  function clearSelfNameError() {
+    $('self-name').classList.remove('is-invalid');
+    $('self-name').removeAttribute('aria-invalid');
+    $('self-name-error').hidden = true;
+  }
+
+  /** 一覧の先頭に固定する自分の主カレンダーの行。値は 01 で決めるので、ここでは表示だけ */
+  function renderPrimaryRow(r) {
+    var tr = el('tr', 'is-primary' + (r.selected ? ' is-selected' : ''));
+
+    var tdCheck = el('td', 'col-check');
+    var cb = el('input');
+    cb.type = 'checkbox';
+    cb.checked = r.selected;
+    cb.setAttribute('aria-label', '自分のカレンダーを選択');
+    cb.addEventListener('change', function () { r.selected = cb.checked; renderExport(); });
+    tdCheck.appendChild(cb);
+    tr.appendChild(tdCheck);
+
+    var tdColor = el('td', 'col-color');
+    var cell = el('div', 'color-cell');
+    var sw = el('span', 'swatch' + (r.color ? '' : ' is-plain'));
+    if (r.color) sw.style.setProperty('--c', r.color);
+    cell.appendChild(sw);
+    cell.appendChild(el('span', 'id-cell', r.color || ''));
+    tdColor.appendChild(cell);
+    tr.appendChild(tdColor);
+
+    var tdName = el('td', 'col-name');
+    var name = r.displayName.trim();
+    tdName.appendChild(el('span', name ? 'self-name' : 'self-missing', name || '名前が未入力'));
+    var edit = el('button', 'remove-btn', name ? '01で変える' : '01で入力する');
+    edit.type = 'button';
+    edit.addEventListener('click', function () { $('self-name').focus(); $('self-name').scrollIntoView({ block: 'center' }); });
+    tdName.appendChild(document.createTextNode(' '));
+    tdName.appendChild(edit);
+    tr.appendChild(tdName);
+
+    var tdSummary = el('td');
+    tdSummary.appendChild(document.createTextNode(r.summary));
+    tdSummary.appendChild(document.createTextNode(' '));
+    tdSummary.appendChild(el('span', 'badge is-primary', 'あなたのカレンダー'));
+    tr.appendChild(tdSummary);
+
+    var tdId = el('td', 'id-cell', r.id);
+    tdId.title = r.id;
+    tr.appendChild(tdId);
+    tr.appendChild(el('td', 'col-role', roleLabel(r.accessRole)));
+    return tr;
+  }
+
+  function renderExport() {
+    var body = $('export-body');
+    clear(body);
+    var me = primaryRow();
+    if (me) body.appendChild(renderPrimaryRow(me));
+    renderSelf();
+    var rows = visibleExportRows();
+    if (!rows.length && !me) {
+      body.appendChild(emptyRow(6, state.calendars.length ? '該当するカレンダーがありません。' : 'カレンダーがありません。'));
+    }
+    rows.forEach(function (r) {
+      var tr = el('tr');
+      if (r.primary) tr.classList.add('is-primary');
+      if (r.selected) tr.classList.add('is-selected');
+
+      var tdCheck = el('td', 'col-check');
+      var cb = el('input');
+      cb.type = 'checkbox';
+      cb.checked = r.selected;
+      cb.setAttribute('aria-label', (r.displayName || r.summary || r.id) + ' を選択');
+      cb.addEventListener('change', function () {
+        r.selected = cb.checked;
+        tr.classList.toggle('is-selected', r.selected);
+        updateExportCount();
+      });
+      tdCheck.appendChild(cb);
+      tr.appendChild(tdCheck);
+
+      var tdColor = el('td', 'col-color');
+      var cell = el('div', 'color-cell');
+      var swatch = el('input');
+      swatch.type = 'color';
+      swatch.title = '色を選ぶ';
+      var hex = el('input');
+      hex.type = 'text';
+      hex.className = 'hex-input';
+      hex.maxLength = 7;
+      hex.placeholder = '#rrggbb';
+      hex.spellcheck = false;
+      hex.setAttribute('aria-label', '色コード');
+      bindColorPair(swatch, hex, r.color, function (c) { if (c !== null) r.color = c; });
+      cell.appendChild(swatch);
+      cell.appendChild(hex);
+      cell.appendChild(copyButton(function () { return r.color; }));
+      tdColor.appendChild(cell);
+      tr.appendChild(tdColor);
+
+      var tdName = el('td', 'col-name');
+      var name = el('input');
+      name.type = 'text';
+      name.value = r.displayName;
+      name.placeholder = r.primary ? '例: 山田 太郎' : '表示名';
+      name.setAttribute('aria-label', '表示名');
+      name.addEventListener('input', function () { r.displayName = name.value; });
+      tdName.appendChild(name);
+      tr.appendChild(tdName);
+
+      var tdSummary = el('td');
+      tdSummary.appendChild(document.createTextNode(r.summary));
+      if (r.primary) { tdSummary.appendChild(document.createTextNode(' ')); tdSummary.appendChild(el('span', 'badge is-primary', '自分の主カレンダー')); }
+      if (r.manual) { tdSummary.appendChild(document.createTextNode(' ')); tdSummary.appendChild(el('span', 'badge is-manual', '手動追加')); }
+      if (r.hidden) { tdSummary.appendChild(document.createTextNode(' ')); tdSummary.appendChild(el('span', 'badge', '非表示')); }
+      if (r.manual) {
+        var remove = el('button', 'remove-btn', '削除');
+        remove.type = 'button';
+        remove.addEventListener('click', function () {
+          state.exportRows = state.exportRows.filter(function (x) { return x !== r; });
+          renderExport();
+        });
+        tdSummary.appendChild(document.createTextNode(' '));
+        tdSummary.appendChild(remove);
+      }
+      tr.appendChild(tdSummary);
+
+      var tdId = el('td', 'id-cell', r.id);
+      tdId.title = r.id;
+      tr.appendChild(tdId);
+      tr.appendChild(el('td', 'col-role', roleLabel(r.accessRole)));
+
+      body.appendChild(tr);
+    });
+    updateExportCount();
+  }
+
+  function updateExportCount() {
+    var n = state.exportRows.filter(function (r) { return r.selected; }).length;
+    $('export-count').textContent = n ? n + '件を選択中' : '☑を入れたカレンダーがファイルに出力されます';
+    $('export-bulk-apply').disabled = n === 0;
+    $('export-download').disabled = n === 0;
+    $('export-copy').disabled = n === 0;
+  }
+
+  function exportRowsToTable() {
+    var selected = state.exportRows.filter(function (r) { return r.selected; });
+    var missingName = selected.filter(function (r) { return !r.displayName.trim(); });
+    return {
+      selected: selected,
+      missingName: missingName,
+      table: [HEADERS].concat(selected.map(function (r) {
+        return [r.displayName.trim(), r.summary, r.id, r.accessRole, r.color];
+      }))
+    };
+  }
+
+  function confirmExport() {
+    var result = exportRowsToTable();
+    if (!result.selected.length) { showMessage('出力する行が選択されていません。', 'error'); return null; }
+    var me = primaryRow();
+    if (me && me.selected && !me.displayName.trim()) {
+      showSelfNameError();
+      showMessage('あなたのカレンダーの名前が空です。01 で名前を入力するか、「受け取った人にも登録してもらう」を外してください。', 'error');
+      $('self-name').focus();
+      return null;
+    }
+    showMessage('');
+    if (result.missingName.length) {
+      showMessage('表示名が空の行が ' + result.missingName.length + ' 件あります。受け取った人の側では、その行の表示名は変更されません。', 'info');
+    }
+    return result.table;
+  }
+
+  function addManualRow() {
+    var id = $('manual-id').value.trim();
+    var name = $('manual-name').value.trim();
+    var color = normalizeColor($('manual-color').value);
+    if (!isValidId(id)) { showMessage('カレンダーIDの形式が正しくありません（@ を含むIDを入力してください）。', 'error'); return; }
+    if (color && !HEX_COLOR.test(color)) { showMessage('色コードは #rrggbb 形式で入力してください。', 'error'); return; }
+    var existing = state.exportRows.filter(function (r) { return r.id === id; })[0];
+    if (existing) {
+      existing.displayName = name || existing.displayName;
+      existing.color = color || existing.color;
+      existing.selected = true;
+    } else {
+      state.exportRows.push({
+        key: id, id: id, summary: '', accessRole: '', displayName: name, color: color,
+        selected: true, primary: false, owner: false, hidden: false, manual: true
+      });
+    }
+    $('manual-id').value = '';
+    $('manual-name').value = '';
+    showMessage('');
+    renderExport();
+  }
+
+  // =====================================================================
+  // インポート
+  // =====================================================================
+  function looksLikeHeader(cells) {
+    var joined = cells.join(' ');
+    return !cells.some(function (c) { return isValidId(c); }) && /表示名|ID|メール|カラー|色|name|email|color/i.test(joined);
+  }
+
+  function mapColumns(header) {
+    var map = { displayName: 0, summary: 1, id: 2, accessRole: 3, color: 4 };
+    if (!header) return map;
+    var found = { displayName: -1, summary: -1, id: -1, accessRole: -1, color: -1 };
+    header.forEach(function (h, i) {
+      var t = String(h).trim();
+      if (found.summary < 0 && /正規/.test(t)) { found.summary = i; return; }
+      if (found.displayName < 0 && /表示名|name/i.test(t)) { found.displayName = i; return; }
+      if (found.id < 0 && /ID|メール|email/i.test(t)) { found.id = i; return; }
+      if (found.accessRole < 0 && /権限|role/i.test(t)) { found.accessRole = i; return; }
+      if (found.color < 0 && /色|カラー|color/i.test(t)) { found.color = i; return; }
+    });
+    // ID列が見つからない場合は位置固定で解釈する
+    if (found.id < 0) return map;
+    Object.keys(found).forEach(function (k) { if (found[k] >= 0) map[k] = found[k]; });
+    return map;
+  }
+
+  function loadImportText(text, sourceName) {
+    var delimiter = detectDelimiter(text);
+    var table = parseDelimited(text, delimiter);
+    if (!table.length) { showMessage('読み込めるデータがありません。', 'error'); return; }
+    var header = looksLikeHeader(table[0]) ? table.shift() : null;
+    var cols = mapColumns(header);
+    var seen = {};
+    state.importRows = table.map(function (cells, idx) {
+      function cell(i) { return i >= 0 && i < cells.length ? String(cells[i]).trim() : ''; }
+      var row = {
+        line: idx + (header ? 2 : 1),
+        displayName: restoreSpreadsheetSafe(cell(cols.displayName)),
+        summary: cell(cols.summary),
+        id: restoreSpreadsheetSafe(cell(cols.id)),
+        accessRole: cell(cols.accessRole),
+        color: normalizeColor(restoreSpreadsheetSafe(cell(cols.color))),
+        valid: true, error: '', selected: true, manualOff: false, action: '', body: null, status: 'pending', statusText: ''
+      };
+      if (!row.id) { row.valid = false; row.error = 'IDが空です'; }
+      else if (!isValidId(row.id)) { row.valid = false; row.error = 'IDの形式が不正です'; }
+      else if (seen[row.id]) { row.valid = false; row.error = 'IDが重複しています（' + seen[row.id] + '行目と同じ）'; }
+      else if (row.color && !HEX_COLOR.test(row.color)) { row.valid = false; row.error = '色コードは #rrggbb 形式で指定してください'; }
+      if (row.valid) seen[row.id] = row.line;
+      return row;
+    });
+    state.importSourceName = sourceName || '';
+    $('import-file-name').textContent = (sourceName || 'テキスト') + '（' + state.importRows.length + '行）';
+    $('import-source').hidden = false;
+    resetRunState();
+    showMessage('');
+    computeImportActions();
+    renderImport();
+  }
+
+  /** 実行前の状態にバーを戻す（読み込み直し・クリア時） */
+  function resetRunState() {
+    $('import-progress').hidden = true;
+    $('import-show-result').hidden = true;
+    $('import-result-summary').hidden = true;
+    $('import-result-summary').textContent = '';
+  }
+
+  function clearImport() {
+    if (state.running) return;
+    state.importRows = [];
+    state.importSourceName = '';
+    $('import-source').hidden = true;
+    $('import-file-name').textContent = '';
+    $('import-text').value = '';
+    resetRunState();
+    showMessage('');
+    renderImport();
+  }
+
+  function computeImportActions() {
+    var showInSidebar = $('import-show-in-sidebar').checked;
+    state.importRows.forEach(function (row) {
+      if (!row.valid) { row.action = 'invalid'; row.body = null; return; }
+      if (state.myEmail && row.id === state.myEmail) { row.action = 'skip'; row.error = '自分の主カレンダーのため対象外'; row.body = null; return; }
+      var existing = state.byId[row.id];
+      if (!existing) {
+        var res = { id: row.id };
+        if (row.displayName) res.summaryOverride = row.displayName;
+        if (row.color) { res.backgroundColor = row.color; res.foregroundColor = '#ffffff'; }
+        if (showInSidebar) { res.selected = true; res.hidden = false; }
+        row.action = 'insert';
+        row.body = res;
+        return;
+      }
+      var patch = {};
+      var effective = existing.summaryOverride || existing.summary || '';
+      if (row.displayName && row.displayName !== effective) patch.summaryOverride = row.displayName;
+      if (row.color && row.color !== normalizeColor(existing.backgroundColor)) { patch.backgroundColor = row.color; patch.foregroundColor = '#ffffff'; }
+      if (showInSidebar && (existing.hidden || !existing.selected)) { patch.selected = true; patch.hidden = false; }
+      if (Object.keys(patch).length === 0) { row.action = 'none'; row.body = null; }
+      else { row.action = 'patch'; row.body = patch; }
+    });
+    // ☑は「実行される行」だけに付ける（利用者が外した行は外したまま）
+    state.importRows.forEach(function (row) {
+      var runnable = row.action === 'insert' || row.action === 'patch';
+      row.selected = runnable && !row.manualOff;
+    });
+  }
+
+  /** 行の「操作」表示。text は短い見出し、detail は補足（更新内容や理由） */
+  function actionLabel(row) {
+    switch (row.action) {
+      case 'insert': return { text: '新規', cls: 'insert', detail: '' };
+      case 'patch': {
+        var parts = [];
+        if (row.body.summaryOverride !== undefined) parts.push('表示名');
+        if (row.body.backgroundColor !== undefined) parts.push('色');
+        if (row.body.selected !== undefined) parts.push('表示');
+        return { text: '更新', cls: 'patch', detail: parts.join('・') };
+      }
+      case 'none': return { text: '変更なし', cls: 'none', detail: '' };
+      case 'skip': return { text: '対象外', cls: 'skip', detail: row.error };
+      default: return { text: 'エラー', cls: 'invalid', detail: row.error };
+    }
+  }
+
+  /** 結果CSVなど、1つの文字列にまとめる場合の操作表記 */
+  function actionText(row) {
+    var a = actionLabel(row);
+    return a.detail ? a.text + '（' + a.detail + '）' : a.text;
+  }
+
+  function statusLabel(row) {
+    switch (row.status) {
+      case 'running': return { text: '処理中…', cls: 'status-running' };
+      case 'waiting': return { text: row.statusText, cls: 'status-running' };
+      case 'done': return { text: row.statusText, cls: 'status-ok' };
+      case 'error': return { text: row.statusText, cls: 'status-error' };
+      case 'cancelled': return { text: '中断', cls: 'status-muted' };
+      default: return { text: '', cls: '' };
+    }
+  }
+
+  function renderImport() {
+    var body = $('import-body');
+    clear(body);
+    if (!state.importRows.length) {
+      body.appendChild(emptyRow(6, 'ファイルを読み込むと、行ごとの操作がここに表示されます。'));
+      updateImportSummary();
+      return;
+    }
+    state.importRows.forEach(function (row) {
+      var tr = el('tr');
+      tr.dataset.line = String(row.line);
+      var selectable = row.valid && row.action !== 'skip' && row.action !== 'none';
+      if (!selectable) tr.classList.add('is-dim');
+      if (row.selected) tr.classList.add('is-selected');
+
+      var tdCheck = el('td', 'col-check');
+      var cb = el('input');
+      cb.type = 'checkbox';
+      cb.checked = row.selected;
+      cb.disabled = !selectable || state.running;
+      cb.setAttribute('aria-label', (row.displayName || row.id) + ' を選択');
+      cb.addEventListener('change', function () {
+        row.selected = cb.checked;
+        row.manualOff = !cb.checked;
+        tr.classList.toggle('is-selected', row.selected);
+        updateImportSummary();
+      });
+      tdCheck.appendChild(cb);
+      tr.appendChild(tdCheck);
+
+      var tdColor = el('td', 'col-color');
+      var cell = el('div', 'color-cell');
+      var sw = el('span', 'swatch' + (row.color ? '' : ' is-plain'));
+      if (row.color) sw.style.setProperty('--c', row.color);
+      cell.appendChild(sw);
+      cell.appendChild(el('span', row.color ? 'id-cell' : 'status-muted', row.color || '変更しない'));
+      tdColor.appendChild(cell);
+      tr.appendChild(tdColor);
+
+      var tdName = el('td', 'col-name');
+      tdName.appendChild(el('span', row.displayName ? '' : 'status-muted', row.displayName || '変更しない'));
+      if (row.summary) tdName.appendChild(el('span', 'sub', row.summary));
+      tr.appendChild(tdName);
+
+      var tdId = el('td', 'id-cell', row.id);
+      tdId.title = row.id;
+      tr.appendChild(tdId);
+
+      var a = actionLabel(row);
+      var tdAction = el('td', 'col-action');
+      tdAction.appendChild(el('span', 'pill is-' + a.cls, a.text));
+      if (a.detail) tdAction.appendChild(el('span', 'sub', a.detail));
+      tr.appendChild(tdAction);
+
+      var s = statusLabel(row);
+      var tdStatus = el('td', 'col-result ' + s.cls, s.text);
+      tdStatus.id = 'import-status-' + row.line;
+      tr.appendChild(tdStatus);
+
+      body.appendChild(tr);
+    });
+    updateImportSummary();
+  }
+
+
+  function updateRowStatus(row) {
+    var td = $('import-status-' + row.line);
+    if (!td) return;
+    var s = statusLabel(row);
+    td.className = 'col-result ' + s.cls;
+    td.textContent = s.text;
+  }
+
+  /** 実行対象: ☑が付いていて、まだ登録できていない行 */
+  function targetRows() {
+    return state.importRows.filter(function (r) { return r.selected && (r.action === 'insert' || r.action === 'patch') && r.status !== 'done'; });
+  }
+
+  function updateImportSummary() {
+    var rows = state.importRows;
+    var counts = { insert: 0, patch: 0, none: 0, skip: 0, invalid: 0 };
+    rows.forEach(function (r) { counts[r.action] = (counts[r.action] || 0) + 1; });
+    var targets = targetRows().length;
+    var tally = $('import-summary');
+    clear(tally);
+    if (rows.length) {
+      [['insert', '新規'], ['patch', '更新'], ['none', '変更なし'], ['skip', '対象外'], ['invalid', 'エラー']].forEach(function (pair) {
+        if (!counts[pair[0]] && pair[0] !== 'insert' && pair[0] !== 'patch') return;
+        var span = el('span', 'is-' + pair[0]);
+        span.appendChild(document.createTextNode(pair[1] + ' '));
+        span.appendChild(el('b', '', String(counts[pair[0]] || 0)));
+        tally.appendChild(span);
+      });
+    }
+    var doneCount = rows.filter(function (r) { return r.status === 'done'; }).length;
+    var errCount = targetRows().filter(function (r) { return r.status === 'error'; }).length;
+    var pending = targets - errCount;
+    $('import-target-count').textContent = targets ? targets + '件を登録' : (doneCount ? 'すべて登録済み' : (rows.length ? '登録するものはありません' : ''));
+    // 残りが失敗分だけなら「失敗分を再試行」を主ボタンにする
+    var retryOnly = !state.running && errCount > 0 && pending === 0;
+    $('import-run').hidden = retryOnly;
+    $('import-run').disabled = state.running || targets === 0;
+    $('import-retry').hidden = state.running || errCount === 0;
+    $('import-retry').className = 'btn' + (retryOnly ? ' btn-primary' : '');
+  }
+
+  function runImport(onlyFailed) {
+    if (state.running) return;
+    if (!isLoggedIn()) { showLoginRequired('ログインの有効期限が切れました。もう一度ログインしてから実行してください。'); return; }
+    if (secondsLeft() < 300) {
+      showMessage('ログインの有効期限が残り ' + Math.ceil(secondsLeft() / 60) + ' 分です。途中で切れないよう、右上のアカウント名 →「別のアカウントに切り替え」から同じアカウントでログインし直してから実行してください。', 'error');
+      return;
+    }
+    var rows = targetRows().filter(function (r) { return onlyFailed ? r.status === 'error' : true; });
+    if (!rows.length) return;
+    state.running = true;
+    state.cancelRequested = false;
+    $('import-run').disabled = true;
+    $('import-cancel').hidden = false;
+    $('import-cancel').disabled = false;
+    $('import-show-result').hidden = true;
+    $('import-result-summary').hidden = true;
+    $('import-progress').hidden = false;
+    showMessage('');
+    rows.forEach(function (r) { r.status = 'pending'; r.statusText = ''; updateRowStatus(r); });
+    renderImport();
+
+    var done = 0;
+    var okCount = 0;
+    var errCount = 0;
+    function progress() {
+      $('import-progress-fill').style.width = Math.round(done / rows.length * 100) + '%';
+      $('import-progress-text').textContent = done + ' / ' + rows.length + '（成功 ' + okCount + '・失敗 ' + errCount + '）';
+    }
+    progress();
+
+    function step(i) {
+      if (i >= rows.length || state.cancelRequested) {
+        for (var j = i; j < rows.length; j++) { rows[j].status = 'cancelled'; updateRowStatus(rows[j]); }
+        return Promise.resolve();
+      }
+      var row = rows[i];
+      row.status = 'running';
+      updateRowStatus(row);
+      var call = row.action === 'insert' ? insertCalendar(row.body) : patchCalendar(row.id, row.body);
+      return call.then(function (result) {
+        if (result && result.id) state.byId[result.id] = result;
+        row.status = 'done';
+        row.statusText = row.action === 'insert' ? '登録済' : '更新済';
+        okCount++;
+      }).catch(function (err) {
+        row.status = 'error';
+        row.statusText = describeError(err);
+        errCount++;
+      }).then(function () {
+        done++;
+        updateRowStatus(row);
+        progress();
+        return step(i + 1);
+      });
+    }
+
+    return step(0).then(function () {
+      state.running = false;
+      $('import-cancel').hidden = true;
+      $('import-progress').hidden = true;
+      $('import-show-result').hidden = false;
+      renderImport();
+      lastRun = { total: rows.length, ok: okCount, err: errCount, cancelled: state.cancelRequested };
+      var summary = $('import-result-summary');
+      summary.textContent = resultHeadline() + '（成功 ' + okCount + ' ／ 失敗 ' + errCount + '）';
+      summary.className = 'result-summary ' + (errCount ? 'is-error' : 'is-ok');
+      summary.hidden = false;
+      showResultModal();
+      // 登録後の状態を反映する（一覧に追加分が出るように）
+      return listAllCalendars().then(function (items) {
+        state.calendars = items;
+        state.byId = {};
+        items.forEach(function (it) { state.byId[it.id] = it; });
+        buildExportRows();
+        renderExport();
+      }).catch(function () { /* 一覧の再取得失敗は結果表示に影響しない */ });
+    });
+  }
+
+  function resultTable() {
+    return [HEADERS.concat([STATUS_HEADER])].concat(state.importRows.map(function (row) {
+      var status;
+      if (row.status === 'done' || row.status === 'error' || row.status === 'cancelled') status = statusLabel(row).text;
+      else if (row.action === 'none') status = '変更なし';
+      else if (row.action === 'skip' || row.action === 'invalid') status = actionText(row);
+      else status = row.selected ? '未実行' : '対象外';
+      return [row.displayName, row.summary, row.id, row.accessRole, row.color, status];
+    }));
+  }
+
+  // =====================================================================
+  // 実行結果（ステップ3にそのまま表示する）
+  // =====================================================================
+  var lastRun = { total: 0, ok: 0, err: 0, cancelled: false };
+
+  function failedRows() {
+    return state.importRows.filter(function (r) { return r.status === 'error'; });
+  }
+
+  function failedTable() {
+    return [['表示名', 'カレンダーID', '理由']].concat(failedRows().map(function (r) {
+      return [r.displayName, r.id, r.statusText];
+    }));
+  }
+
+  function resultHeadline() {
+    if (lastRun.cancelled) return '中断しました';
+    return lastRun.err ? '一部を登録できませんでした' : '登録が完了しました';
+  }
+
+  function showResultModal() {
+    var failed = failedRows();
+    var lead = $('result-summary');
+    lead.textContent = resultHeadline() + ' — 成功 ' + lastRun.ok + '件 ／ 失敗 ' + lastRun.err + '件（' + lastRun.total + '件中）';
+    lead.className = 'result-lead ' + (lastRun.err ? 'is-error' : (lastRun.cancelled ? '' : 'is-ok'));
+    var body = $('result-failed-body');
+    clear(body);
+    failed.forEach(function (r) {
+      var tr = el('tr');
+      tr.appendChild(el('td', '', r.displayName || '（変更しない）'));
+      tr.appendChild(el('td', 'id-cell', r.id));
+      tr.appendChild(el('td', 'status-error', r.statusText));
+      body.appendChild(tr);
+    });
+    $('result-failed-wrap').hidden = !failed.length;
+    $('result-copy-failed').hidden = !failed.length;
+    $('result-copy-message').textContent = '';
+    $('result-modal').hidden = false;
+    $('result-close').focus();
+  }
+
+  function hideResultModal() { $('result-modal').hidden = true; }
+
+  function copyWithFeedback(text, doneMessage) {
+    copyText(text).then(function () {
+      $('result-copy-message').textContent = doneMessage;
+    }).catch(function (err) {
+      $('result-copy-message').textContent = describeError(err);
+    });
+  }
+
+  // =====================================================================
+  // イベント
+  // =====================================================================
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(function (t) {
+      var active = t.dataset.tab === name;
+      t.classList.toggle('is-active', active);
+      t.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    $('panel-export').hidden = name !== 'export';
+    $('panel-import').hidden = name !== 'import';
+    setTitleblockPage(name === 'export' ? '1 / 2 · 配布する人' : '2 / 2 · 受け取った人');
+  }
+
+  function bind() {
+    document.querySelectorAll('.tab').forEach(function (t) {
+      t.addEventListener('click', function () { switchTab(t.dataset.tab); });
+    });
+    // アカウントメニュー（外側クリック・Escで閉じる）
+    var menu = $('account-menu');
+    document.addEventListener('click', function (e) { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && menu.open) menu.open = false; });
+    $('reload-button').addEventListener('click', function () { menu.open = false; loadCalendars(); });
+    $('login-button').addEventListener('click', function () { startLogin(''); });
+    $('switch-account').addEventListener('click', function () { menu.open = false; startLogin(''); });
+    $('logout-button').addEventListener('click', function () {
+      menu.open = false;
+      var t = auth.token;
+      clearLogin();
+      state.calendars = []; state.byId = {}; state.myEmail = ''; state.exportRows = []; state.importRows = [];
+      revokeToken(t).then(function (sent) {
+        showLoginRequired('');
+        showMessage(sent ? 'ログアウトしました。' : 'ログアウトしました。Google 側のアクセス権はアカウント設定から確認してください。', 'info');
+      });
+    });
+
+    // 実行結果ダイアログ
+    $('import-show-result').addEventListener('click', showResultModal);
+    $('result-close').addEventListener('click', hideResultModal);
+    $('result-close-x').addEventListener('click', hideResultModal);
+    $('result-modal').addEventListener('click', function (e) { if (e.target === $('result-modal')) hideResultModal(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('result-modal').hidden) hideResultModal(); });
+    $('result-copy-failed').addEventListener('click', function () {
+      copyWithFeedback(toTsv(failedTable()), '失敗一覧をクリップボードにコピーしました。');
+    });
+    $('result-copy-all').addEventListener('click', function () {
+      copyWithFeedback(toTsv(resultTable()), '全結果をクリップボードにコピーしました。');
+    });
+    $('result-download').addEventListener('click', function () {
+      downloadText('calendar-import-result-' + todayStamp() + '.csv', toCsv(resultTable()), 'text/csv;charset=utf-8');
+    });
+
+    // エクスポート: 01 自分のカレンダー
+    $('self-name').addEventListener('input', function () {
+      var me = primaryRow();
+      if (!me) return;
+      me.displayName = $('self-name').value;
+      if (me.displayName.trim()) clearSelfNameError();
+      renderExport();
+    });
+    bindColorPair($('self-swatch'), $('self-color'), '', function (c) {
+      var me = primaryRow();
+      if (me && c !== null) { me.color = c; renderExport(); }
+    });
+    $('self-include').addEventListener('change', function () {
+      var me = primaryRow();
+      if (!me) return;
+      me.selected = $('self-include').checked;
+      if (!me.selected) clearSelfNameError();
+      renderExport();
+    });
+
+    // エクスポート: 02 一覧
+    $('export-include-owner').addEventListener('change', renderExport);
+    $('export-include-hidden').addEventListener('change', renderExport);
+    $('export-search').addEventListener('input', renderExport);
+    $('export-select-all').addEventListener('click', function () { visibleExportRows().forEach(function (r) { r.selected = true; }); renderExport(); });
+    $('export-select-none').addEventListener('click', function () { state.exportRows.forEach(function (r) { r.selected = false; }); renderExport(); });
+    $('manual-add-button').addEventListener('click', addManualRow);
+    bindColorPair($('manual-swatch'), $('manual-color'), $('manual-color').value, function () {});
+    bindColorPair($('export-bulk-swatch'), $('export-bulk-hex'), $('export-bulk-hex').value, function () {});
+    $('export-bulk-apply').addEventListener('click', function () {
+      var c = normalizeColor($('export-bulk-hex').value);
+      if (!HEX_COLOR.test(c)) { showMessage('色コードは #rrggbb 形式で入力してください。', 'error'); return; }
+      var targets = state.exportRows.filter(function (r) { return r.selected; });
+      if (!targets.length) { showMessage('色を適用する行が選択されていません。', 'error'); return; }
+      targets.forEach(function (r) { r.color = c; });
+      renderExport();
+      showMessage(targets.length + '件の行に ' + c + ' を設定しました。', 'info');
+    });
+    $('export-download').addEventListener('click', function () {
+      var table = confirmExport();
+      if (!table) return;
+      downloadText('calendar-list-' + todayStamp() + '.csv', toCsv(table), 'text/csv;charset=utf-8');
+      showMessage('CSVをダウンロードしました。ダウンロードが始まらない場合は「表としてコピー」を使ってください。', 'info');
+    });
+    $('export-copy').addEventListener('click', function () {
+      var table = confirmExport();
+      if (!table) return;
+      copyText(toTsv(table)).then(function () {
+        showMessage('クリップボードにコピーしました。スプレッドシートやExcelに貼り付けできます。', 'info');
+      }).catch(function (err) { showMessage(describeError(err), 'error'); });
+    });
+
+    // インポート: ファイル選択・ドロップ・貼り付け
+    function loadImportFile(file) {
+      if (!file) return;
+      file.arrayBuffer().then(function (buf) {
+        loadImportText(decodeBytes(buf), file.name);
+      }).catch(function (err) { showMessage('ファイルを読み込めませんでした: ' + describeError(err), 'error'); });
+    }
+    $('import-file').addEventListener('change', function () {
+      loadImportFile($('import-file').files[0]);
+      $('import-file').value = '';
+    });
+    var dropzone = $('import-dropzone');
+    ['dragenter', 'dragover'].forEach(function (type) {
+      dropzone.addEventListener(type, function (e) { e.preventDefault(); dropzone.classList.add('is-over'); });
+    });
+    ['dragleave', 'drop'].forEach(function (type) {
+      dropzone.addEventListener(type, function () { dropzone.classList.remove('is-over'); });
+    });
+    dropzone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) { loadImportFile(file); return; }
+      var text = e.dataTransfer && e.dataTransfer.getData('text/plain');
+      if (text && text.trim()) loadImportText(text, 'ドロップしたテキスト');
+    });
+    // 登録タブを開いている間は、入力欄以外での Ctrl+V / Cmd+V で表を受け取る
+    document.addEventListener('paste', function (e) {
+      if ($('panel-import').hidden || state.running) return;
+      var tag = (e.target && e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      var text = e.clipboardData && e.clipboardData.getData('text/plain');
+      if (!text || !text.trim()) return;
+      e.preventDefault();
+      loadImportText(text, '貼り付けたテキスト');
+    });
+    $('import-clear').addEventListener('click', clearImport);
+    $('import-parse-text').addEventListener('click', function () {
+      var text = $('import-text').value;
+      if (!text.trim()) { showMessage('テキストが空です。', 'error'); return; }
+      loadImportText(text, '貼り付けたテキスト');
+    });
+    $('import-show-in-sidebar').addEventListener('change', function () { computeImportActions(); renderImport(); });
+    $('import-select-all').addEventListener('click', function () {
+      state.importRows.forEach(function (r) { r.manualOff = false; });
+      computeImportActions();
+      renderImport();
+    });
+    $('import-select-none').addEventListener('click', function () {
+      state.importRows.forEach(function (r) { r.manualOff = true; });
+      computeImportActions();
+      renderImport();
+    });
+    // サンドボックス化されたiframeでは window.confirm が使えないため、ページ内で確認する
+    $('import-run').addEventListener('click', function () {
+      var n = targetRows().length;
+      $('import-confirm-text').textContent = n + '件を ' + (state.myEmail || 'このアカウント') + ' のカレンダーに登録・更新します。よろしいですか？';
+      $('import-confirm').hidden = false;
+      $('import-run').hidden = true;
+      $('import-confirm-yes').focus();
+    });
+    $('import-confirm-yes').addEventListener('click', function () {
+      $('import-confirm').hidden = true;
+      $('import-run').hidden = false;
+      runImport(false);
+    });
+    $('import-confirm-no').addEventListener('click', function () {
+      $('import-confirm').hidden = true;
+      $('import-run').hidden = false;
+      $('import-run').focus();
+    });
+    $('import-cancel').addEventListener('click', function () { state.cancelRequested = true; $('import-cancel').disabled = true; });
+    $('import-retry').addEventListener('click', function () { runImport(true); });
+  }
+
+  bind();
+
+  // 起動: 認可画面から戻ってきた場合はURLフラグメントのトークンを受け取り、URLから消す
+  // （google.script.history.replace の hash に空文字を渡すとフラグメントが消える）
+  function clearUrlFragment() {
+    try { google.script.history.replace({}, {}, ''); } catch (e) { /* 無視 */ }
+  }
+  function boot() {
+    if (!(window.google && google.script && google.script.url)) { showLoginRequired(''); return; }
+    google.script.url.getLocation(function (loc) {
+      var frag = parseFragment(loc.hash);
+      if (frag.error) {
+        clearUrlFragment();
+        showLoginRequired(frag.error === 'access_denied' ? 'ログインがキャンセルされました。' : 'ログインに失敗しました: ' + frag.error);
+        return;
+      }
+      if (!frag.access_token) { showLoginRequired(''); return; }
+      clearUrlFragment();
+      var expected = storageGet(STATE_KEY);
+      storageRemove(STATE_KEY);
+      if (!expected || frag.state !== expected) {
+        showLoginRequired('ログイン応答の検証に失敗しました。もう一度ログインしてください。');
+        return;
+      }
+      verifyToken(frag.access_token).then(function (info) {
+        setLoggedIn(frag.access_token, frag.expires_in || info.expires_in);
+        showApp();
+        return loadCalendars();
+      }).catch(function (err) {
+        showLoginRequired(String(err && err.message || err));
+      });
+    });
+  }
+  boot();
+})();
+</script>

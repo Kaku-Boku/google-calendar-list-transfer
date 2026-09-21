@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledMcpjsonServers": ["gas_clasp"],
+  "permissions": {
+    "allow": [
+      "mcp__gas_clasp__list_projects",
+      "Bash(npm run check)",
+      "Bash(npm run check:mcp)",
+      "Bash(npm run gas:status)",
+      "Bash(npm run gas:auth)"
+    ],
+    "ask": [
+      "mcp__gas_clasp__pull_files",
+      "mcp__gas_clasp__push_files",
+      "Bash(npm run gas:pull*)",
+      "Bash(npm run gas:push*)",
+      "Bash(npm run gas:create*)"
+    ],
+    "deny": [
+      "mcp__gas_clasp__create_project",
+      "mcp__gas_clasp__clone_project",
+      "Read(./.local/**)",
+      "Read(./**/.clasprc.json)"
+    ]
+  }
+}

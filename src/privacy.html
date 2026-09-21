@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <base target="_top">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+  <style>
+    /* Shu to Sumi — 本文面（body）。塗りなし、線と余白で階層を作る */
+    :root {
+      --sts-screen: #F6F9FA; --sts-paper: #FFFFFF; --sts-sumi: #1D252D; --sts-sumi-2: #606A74;
+      --sts-rule: #C9D3D7; --sts-shu: #F9601F; --sts-shu-text: #BF4306; --sts-ki: #CDE81C; --sts-link: #1467C2;
+      --sts-font-body: "BIZ UDPGothic", "Hiragino Sans", "Meiryo", sans-serif;
+      --sts-font-mono: "IBM Plex Mono", "Menlo", monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: clamp(16px, 4vw, 40px) clamp(16px, 4vw, 40px) 64px;
+      font-family: var(--sts-font-body); font-size: 16px; line-height: 1.8; color: var(--sts-sumi); background: var(--sts-screen);
+      -webkit-font-smoothing: antialiased;
+    }
+    main { max-width: 760px; margin: 0 auto; background: var(--sts-paper); border: 1px solid var(--sts-sumi); padding: 40px clamp(20px, 5vw, 48px) 32px; }
+    h1 { font-size: 24px; line-height: 1.3; margin: 0; }
+    .shu-line { display: block; width: 48px; height: 3px; background: var(--sts-shu); margin: 16px 0 24px; }
+    h2 { font-size: 20px; line-height: 1.3; margin: 40px 0 8px; }
+    h2::before { content: "■ "; }
+    p, li { margin: 0; }
+    p + p { margin-top: 12px; }
+    ul { margin: 8px 0 0; padding-left: 1.4em; }
+    li + li { margin-top: 8px; }
+    code { font-family: var(--sts-font-mono); font-size: 14px; }
+    a { color: var(--sts-link); text-decoration: underline; text-underline-offset: 2px; }
+    a:hover { color: var(--sts-shu-text); }
+    .lead { color: var(--sts-sumi); }
+    .meta { color: var(--sts-sumi-2); font-size: 12px; }
+
+    /* 表題欄：資料名／発行／版／頁 */
+    .titleblock {
+      display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); gap: 1px;
+      margin-top: 48px; border: 1px solid var(--sts-sumi); border-top-width: 3px; background: var(--sts-sumi);
+    }
+    .tb-cell { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 12px; min-height: 52px; min-width: 0; background: var(--sts-paper); }
+    .tb-cell small { font-size: 11px; color: var(--sts-sumi-2); line-height: 1.3; }
+    .tb-cell b { font-size: 14px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tb-cell .mono { font-family: var(--sts-font-mono); font-size: 13px; line-height: 1.3; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    @media (max-width: 600px) {
+      .titleblock { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .tb-cell.tb-name, .tb-cell.tb-page { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="meta">カレンダー一括登録</p>
+    <h1>プライバシーポリシー</h1>
+    <span class="shu-line" aria-hidden="true"></span>
+    <p class="lead">「カレンダー一括登録」（以下「本アプリ」）は、Google カレンダーのカレンダーリスト（購読しているカレンダーの表示名と色）を
+      CSV でやり取りし、別のアカウントに一括登録するためのツールです。</p>
+
+    <h2>アクセスするデータ</h2>
+    <ul>
+      <li>Google Calendar API の <code>calendar.calendarlist</code> スコープのみを使用します。
+        利用者のカレンダーリスト（購読しているカレンダーの ID、名前、表示名、色、権限、表示状態）の読み取りと、
+        表示名・色・表示状態の変更、カレンダーの購読追加を行います。</li>
+      <li>予定（イベント）の内容、連絡先、メールなど、カレンダーリスト以外のデータにはアクセスしません。</li>
+    </ul>
+
+    <h2>データの保存と送信</h2>
+    <ul>
+      <li>本アプリはサーバー側にデータベースを持ちません。取得したカレンダーリストと OAuth アクセストークンは利用者のブラウザーのメモリ上でのみ扱い、
+        ページを閉じると失われます。</li>
+      <li>Google Calendar API との通信は利用者のブラウザーから Google に直接行われ、第三者のサーバーを経由しません。</li>
+      <li>CSV ファイルは利用者が自分で保存・受け渡しするものであり、本アプリが収集・送信することはありません。</li>
+      <li>利用者のデータを第三者に提供・販売することはありません。</li>
+    </ul>
+
+    <h2>アクセス権の取り消し</h2>
+    <p>本アプリのアクセス権はいつでも
+      <a href="https://myaccount.google.com/permissions">Google アカウントの「第三者のアクセス権」</a>から取り消せます。
+      本アプリの「ログアウト」ボタンは、ブラウザー内のアクセストークンを破棄し、Google に失効を要求します。
+      失効の成否を確実に確認したい場合は、上記の Google アカウント設定からアクセス権を確認・取り消してください。</p>
+
+    <h2>Google API サービスのユーザーデータに関するポリシー</h2>
+    <p>本アプリによる Google API から取得した情報の使用と他のアプリへの転送は、
+      <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API サービスのユーザーデータに関するポリシー</a>
+      （限定的使用の要件を含む）に準拠します。</p>
+
+    <h2>お問い合わせ</h2>
+    <p>本アプリの配信者: <?= supportEmail ?></p>
+
+    <div class="titleblock" aria-label="表題欄">
+      <div class="tb-cell tb-name"><small>資料名</small><b>カレンダー一括登録 プライバシーポリシー</b></div>
+      <div class="tb-cell tb-issuer"><small>発行</small><b>配信者</b></div>
+      <div class="tb-cell tb-version"><small>版</small><span class="mono">v1.0 · 2026-09-20</span></div>
+      <div class="tb-cell tb-page"><small>頁</small><span class="mono">1 / 1</span></div>
+    </div>
+  </main>
+</body>
+</html>

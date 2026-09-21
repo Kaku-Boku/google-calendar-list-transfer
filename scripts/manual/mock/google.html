@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Google の画面イメージ（マニュアル用の再現）</title>
+<!-- Google のログイン・警告・許可画面の再現。実際の表示と細部が異なることがある。?screen=chooser|warn|warn-open|consent -->
+<style>
+  body { margin: 0; background: #f0f4f9; font-family: "Google Sans", Roboto, "Hiragino Sans", "Noto Sans JP", Arial, sans-serif; color: #1f1f1f; -webkit-font-smoothing: antialiased; }
+  .card { background: #fff; border-radius: 28px; margin: 24px; padding: 36px 40px; box-sizing: border-box; }
+  .card.narrow { width: 450px; margin: 24px auto; padding: 32px 40px; }
+  .card.wide { width: 900px; margin: 24px auto; padding: 0; overflow: hidden; }
+  .glogo { font-weight: 500; font-size: 22px; letter-spacing: -0.5px; }
+  .glogo b { color: #4285f4; } .glogo i { color: #ea4335; font-style: normal; } .glogo u { color: #fbbc04; text-decoration: none; } .glogo s { color: #34a853; text-decoration: none; }
+  h1 { font-size: 32px; font-weight: 400; margin: 20px 0 8px; line-height: 1.25; }
+  .sub { font-size: 16px; margin: 0 0 24px; color: #1f1f1f; }
+  .sub a { color: #0b57d0; text-decoration: none; font-weight: 500; }
+  .account { display: flex; align-items: center; gap: 16px; padding: 14px 8px; border-top: 1px solid #dadce0; }
+  .account:last-child { border-bottom: 1px solid #dadce0; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-size: 14px; font-weight: 500; }
+  .account .name { font-size: 14px; font-weight: 500; }
+  .account .mail { font-size: 14px; color: #444746; }
+  .account.other .avatar { background: #fff; color: #444746; border: 1px solid #dadce0; }
+  .warn-head { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 400; }
+  .tri { width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-bottom: 24px solid #d93025; position: relative; }
+  .tri::after { content: "!"; position: absolute; left: -3px; top: 6px; color: #fff; font-weight: 700; font-size: 14px; }
+  p { font-size: 14px; line-height: 1.6; color: #444746; margin: 12px 0; }
+  .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 28px; }
+  .btn { border-radius: 20px; padding: 10px 24px; font-size: 14px; font-weight: 500; border: 1px solid #747775; color: #0b57d0; background: #fff; }
+  .btn.filled { background: #0b57d0; color: #fff; border-color: #0b57d0; }
+  .link { color: #0b57d0; font-size: 14px; font-weight: 500; }
+  .detail-link { color: #444746; font-size: 14px; font-weight: 500; }
+  .go-link { color: #444746; font-size: 14px; font-weight: 500; text-decoration: underline; display: inline-block; margin-top: 8px; }
+  /* 許可画面 */
+  .bar { padding: 20px 32px; border-bottom: 1px solid #dadce0; font-size: 16px; display: flex; gap: 10px; align-items: center; }
+  .cols { display: grid; grid-template-columns: 1fr 1.2fr; gap: 40px; padding: 32px 40px 40px; }
+  .cols h1 { font-size: 30px; margin: 0 0 32px; }
+  .notice { background: #fef7e0; border-radius: 8px; padding: 18px 20px; display: grid; grid-template-columns: 24px 1fr; gap: 12px; font-size: 13px; line-height: 1.7; color: #3c4043; }
+  .notice .tri { transform: scale(0.7); margin-top: 2px; }
+  .notice a { color: #0b57d0; }
+  .scope { display: flex; gap: 14px; align-items: flex-start; margin: 20px 0; font-size: 14px; line-height: 1.6; }
+  .scope .ic { width: 22px; height: 22px; border: 2px solid #4285f4; border-radius: 3px; color: #4285f4; font-size: 10px; font-weight: 700; display: grid; place-items: center; flex: none; margin-top: 2px; }
+  .lead { font-size: 18px; line-height: 1.5; margin: 24px 0 0; color: #1f1f1f; }
+  .lead a { color: #0b57d0; text-decoration: none; }
+  .fine { font-size: 12.5px; color: #444746; }
+  .btns { display: flex; gap: 12px; justify-content: flex-end; margin-top: 40px; }
+  .btns .btn { min-width: 150px; text-align: center; }
+  [data-screen] { display: none; }
+</style>
+</head>
+<body>
+
+<div class="card narrow" data-screen="chooser">
+  <div class="glogo"><b>G</b><i>o</i><u>o</u><b>g</b><s>l</s><i>e</i></div>
+  <h1>アカウントの選択</h1>
+  <p class="sub"><a href="#">カレンダー一括登録</a> に移動</p>
+  <div class="account pick"><span class="avatar" style="background:#1e8e3e">山</span><span><div class="name">山田 太郎</div><div class="mail">yamada.taro@example.com</div></span></div>
+  <div class="account"><span class="avatar" style="background:#7b1fa2">鈴</span><span><div class="name">鈴木 花子</div><div class="mail">suzuki.hanako@example.com</div></span></div>
+  <div class="account other"><span class="avatar">＋</span><span><div class="name">別のアカウントを使用</div></span></div>
+  <p class="fine" style="margin-top:24px">続行すると、Google はあなたの名前、メールアドレス、言語設定、プロフィール写真をカレンダー一括登録と共有します。</p>
+</div>
+
+<div class="card narrow" data-screen="warn">
+  <div class="glogo"><b>G</b><i>o</i><u>o</u><b>g</b><s>l</s><i>e</i></div>
+  <div class="warn-head" style="margin-top:20px"><span class="tri"></span>このアプリは Google で確認されていません</div>
+  <p>このアプリは、Google アカウントのプライベートな情報へのアクセスをリクエストしています。デベロッパーを知っており、信頼できる場合を除き、このアプリの使用は避けてください。</p>
+  <div class="actions"><span class="detail-link">詳細</span><span class="btn filled">安全なページに戻る</span></div>
+</div>
+
+<div class="card narrow" data-screen="warn-open">
+  <div class="glogo"><b>G</b><i>o</i><u>o</u><b>g</b><s>l</s><i>e</i></div>
+  <div class="warn-head" style="margin-top:20px"><span class="tri"></span>このアプリは Google で確認されていません</div>
+  <p>このアプリは、Google アカウントのプライベートな情報へのアクセスをリクエストしています。デベロッパーを知っており、信頼できる場合を除き、このアプリの使用は避けてください。</p>
+  <div class="actions"><span class="detail-link">詳細を非表示</span><span class="btn filled">安全なページに戻る</span></div>
+  <p style="margin-top:24px">続行すると、アカウントのアクセス許可を求める画面が表示されます。アプリを信頼できる場合のみ続行してください。</p>
+  <span class="go-link">カレンダー一括登録（安全ではないページ）に移動</span>
+</div>
+
+<div class="card wide" data-screen="consent">
+  <div class="bar"><span class="glogo" style="font-size:20px"><b>G</b></span> Google にログイン</div>
+  <div class="cols">
+    <div>
+      <h1>カレンダー一括登録 が Google アカウントへのアクセスを求めています</h1>
+      <div class="account" style="border:0;padding:0"><span class="avatar" style="background:#1e8e3e;width:24px;height:24px;font-size:11px">山</span><span class="mail" style="color:#1f1f1f">yamada.taro@example.com</span></div>
+    </div>
+    <div>
+      <div class="notice"><span class="tri"></span><span>このアプリは Google で検証されていません。このアプリは Google アカウントへのアクセスをリクエストしています。このアプリ デベロッパーを知っており、信頼できる場合に限り続行してください。<a href="#">詳細</a><br>検証が行われないと、このアプリからユーザーデータへのアクセスが一部失われる可能性があります。</span></div>
+      <p class="lead">このアクセス権を付与することで、<a href="#">カレンダー一括登録</a> は以下のことができるようになります。</p>
+      <div class="scope"><span class="ic">31</span><span>登録している Google カレンダーの参照、新規登録、登録解除 です。<br><a class="link" href="#">アクセスの詳細を表示</a></span></div>
+      <p class="fine">カレンダー一括登録 の<a href="#" style="color:#0b57d0">プライバシー ポリシー</a>を読み、お客様のデータがどのように処理、保護されるかをご確認ください。変更は <a href="#" style="color:#0b57d0">Google アカウント</a>からいつでもできます。</p>
+      <div class="btns"><span class="btn">キャンセル</span><span class="btn continue">続行</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var s = new URLSearchParams(location.search).get('screen') || 'chooser';
+  var elm = document.querySelector('[data-screen="' + s + '"]');
+  if (elm) elm.style.display = 'block';
+</script>
+</body>
+</html>

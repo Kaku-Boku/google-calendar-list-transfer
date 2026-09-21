@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <base target="_top">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Barlow+Condensed:wght@700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+  <?!= includeFile('styles') ?>
+</head>
+<body>
+  <header class="appbar">
+    <div class="wrap appbar-inner">
+      <div class="brand">
+        <span class="brand-name">カレンダー一括登録</span>
+        <span class="shu-line" aria-hidden="true"></span>
+      </div>
+      <details class="account" id="account-menu" hidden>
+        <summary title="操作しているアカウント">
+          <span class="account-dot" aria-hidden="true"></span>
+          <span id="account-email" class="account-email">未ログイン</span>
+          <span class="caret" aria-hidden="true"></span>
+        </summary>
+        <div class="menu" role="menu">
+          <p class="menu-note">このアカウントのカレンダーリストを操作しています</p>
+          <button id="reload-button" class="menu-item" type="button" role="menuitem">カレンダーを再読み込み</button>
+          <button id="switch-account" class="menu-item" type="button" role="menuitem">別のアカウントに切り替え</button>
+          <button id="logout-button" class="menu-item is-danger" type="button" role="menuitem">ログアウト</button>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap"><div id="global-message" class="message" role="status" hidden></div></div>
+
+    <!-- ===================== 表紙（ログイン） ===================== -->
+    <section id="panel-login" class="cover gridbg">
+      <div class="wrap cover-inner">
+        <div class="cover-copy">
+          <p class="eyebrow">チームのカレンダーを、同じ名前と色で</p>
+          <h1>共有カレンダーの表示名と色を<br>一括で登録する</h1>
+          <span class="shu-line" aria-hidden="true"></span>
+          <p class="lead">
+            配布する人が一覧ファイルを作り、受け取った人が自分のカレンダーに取り込みます。
+            読み書きするのはカレンダーリスト（表示名・色）だけで、予定の内容には触れません。
+          </p>
+          <button id="login-button" class="btn btn-primary btn-lg" type="button">Googleでログイン</button>
+          <p class="hint">
+            ログイン時にアカウントを選べます。「Google で確認されていません」と出た場合は、アプリ名とアクセス権を確認し、信頼できる場合だけ進めてください。
+            <a href="?page=privacy" target="_blank" rel="noopener">プライバシーポリシー</a>
+          </p>
+        </div>
+        <figure class="cover-figure" aria-hidden="true">
+          <div class="sheet">
+            <div class="sheet-title">マイカレンダー</div>
+            <ul class="sidebar-mock">
+              <li><span class="swatch" style="--c:#0b8043"></span>営業チーム</li>
+              <li><span class="swatch" style="--c:#8e24aa"></span>会議室 A</li>
+              <li><span class="swatch" style="--c:#f6bf26"></span>山田 太郎</li>
+              <li><span class="swatch" style="--c:#039be5"></span>採用面接</li>
+              <li><span class="swatch" style="--c:#d50000"></span>締切・提出物</li>
+            </ul>
+          </div>
+          <figcaption>受け取った人のサイドバー（登録後）</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <nav id="app-tabs" class="tabs" role="tablist" aria-label="役割を選ぶ" hidden>
+      <div class="wrap tabs-inner">
+        <button class="tab is-active" type="button" role="tab" data-tab="export" aria-selected="true">
+          <span class="tab-role">配布する人</span>
+          <span class="tab-title">リストを作る</span>
+        </button>
+        <button class="tab" type="button" role="tab" data-tab="import" aria-selected="false">
+          <span class="tab-role">受け取った人</span>
+          <span class="tab-title">リストを登録する</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ===================== エクスポート ===================== -->
+    <section id="panel-export" class="panel" role="tabpanel" hidden>
+      <div class="wrap">
+        <div class="step">
+          <h2 class="step-title"><span class="step-no" aria-hidden="true">01</span>あなたのカレンダーに、受け取った人へ見せる名前を付ける</h2>
+          <p class="step-help">あなたの予定は、受け取った人の一覧にここで決めた名前と色で表示されます。空のままだとメールアドレスがそのまま表示されます。</p>
+          <div class="step-body">
+            <div class="self-form">
+              <div class="field field-name">
+                <label for="self-name">受け取った人に見せる名前</label>
+                <input type="text" id="self-name" placeholder="例: 山田 太郎（営業）" autocomplete="off" disabled>
+                <p id="self-name-error" class="field-error" hidden>名前が空です。受け取った人の一覧に表示する名前を入れてください</p>
+              </div>
+              <div class="field field-color">
+                <label for="self-color">色</label>
+                <span class="color-pair">
+                  <input type="color" id="self-swatch" value="#ffffff" title="色を選ぶ" disabled>
+                  <input type="text" id="self-color" class="hex-input" value="" maxlength="7" placeholder="#rrggbb" spellcheck="false" aria-label="色コード" disabled>
+                </span>
+              </div>
+              <label class="chip self-include"><input type="checkbox" id="self-include" checked disabled> 受け取った人にも、あなたのカレンダーを登録してもらう</label>
+              <p class="self-id"><span>カレンダーID</span> <span id="self-id" class="mono">読み込み中…</span></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <h2 class="step-title"><span class="step-no" aria-hidden="true">02</span>登録してもらうカレンダーを選び、名前と色を整える</h2>
+          <p class="step-help">表示名と色は受け取った人のカレンダーに反映されます。あなた自身のカレンダー設定は変わりません。あなたのカレンダーは先頭に固定され、名前と色は 01 で変えます。</p>
+          <div class="step-body">
+            <div class="filters">
+              <div class="filter-group">
+                <input type="search" id="export-search" class="search" placeholder="名前やIDで検索" aria-label="カレンダーを検索">
+                <label class="chip"><input type="checkbox" id="export-include-owner" checked> 自分がオーナーのカレンダー</label>
+                <label class="chip"><input type="checkbox" id="export-include-hidden" checked> 非表示のカレンダー</label>
+              </div>
+              <div class="filter-actions">
+                <button id="export-select-all" class="btn btn-ghost" type="button">すべて選択</button>
+                <button id="export-select-none" class="btn btn-ghost" type="button">選択解除</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="grid" id="export-table">
+                <thead>
+                  <tr>
+                    <th class="col-check"><span class="sr-only">選択</span></th>
+                    <th class="col-color">色</th>
+                    <th class="col-name">表示名</th>
+                    <th>元の名前</th>
+                    <th>カレンダーID</th>
+                    <th class="col-role">権限</th>
+                  </tr>
+                </thead>
+                <tbody id="export-body">
+                  <tr><td colspan="6" class="empty">読み込み中…</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-tools">
+              <div class="bulk-color" id="export-bulk">
+                <span class="bulk-label">☑の行の色をまとめて変更</span>
+                <span class="color-pair">
+                  <input type="color" id="export-bulk-swatch" value="#4285f4" title="色を選ぶ">
+                  <input type="text" id="export-bulk-hex" class="hex-input" value="#4285f4" maxlength="7" placeholder="#rrggbb" spellcheck="false" aria-label="まとめて変更する色コード">
+                </span>
+                <button id="export-bulk-apply" class="btn btn-sm" type="button">適用</button>
+              </div>
+            </div>
+
+            <div class="subsection">
+              <h3 class="subsection-title">リストにないカレンダーをIDで追加</h3>
+              <div class="manual-form">
+                <input type="text" id="manual-id" placeholder="カレンダーID（例: xxx@group.calendar.google.com）" aria-label="カレンダーID">
+                <input type="text" id="manual-name" placeholder="表示名" aria-label="表示名">
+                <span class="color-pair">
+                  <input type="color" id="manual-swatch" value="#4285f4" title="色を選ぶ">
+                  <input type="text" id="manual-color" class="hex-input" value="#4285f4" maxlength="7" placeholder="#rrggbb" spellcheck="false" aria-label="色コード">
+                </span>
+                <button id="manual-add-button" class="btn" type="button">追加</button>
+              </div>
+              <p class="hint">受け取った人にそのカレンダーが共有されていないと登録できません。共有はGoogleカレンダー側で設定します。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="action-bar">
+        <div class="wrap action-bar-inner">
+          <div class="action-status">
+            <h2 class="step-title"><span class="step-no" aria-hidden="true">03</span>ファイルにして配る</h2>
+            <span id="export-count" class="count">0件を選択中</span>
+          </div>
+          <div class="action-buttons">
+            <button id="export-copy" class="btn" type="button" title="スプレッドシートやExcelに貼り付けできます">表としてコピー</button>
+            <button id="export-download" class="btn btn-primary" type="button" title="Excelでそのまま開けます">CSVをダウンロード</button>
+          </div>
+        </div>
+      </footer>
+    </section>
+
+    <!-- ===================== インポート ===================== -->
+    <section id="panel-import" class="panel" role="tabpanel" hidden>
+      <div class="wrap">
+        <div class="step">
+          <h2 class="step-title"><span class="step-no" aria-hidden="true">01</span>配布されたリストを読み込む</h2>
+          <div class="step-body">
+            <div class="import-input">
+              <label class="dropzone gridbg" id="import-dropzone" for="import-file">
+                <span class="dropzone-icon" aria-hidden="true"></span>
+                <span class="dropzone-text">
+                  <strong>CSV / TSV ファイルをここにドロップ</strong>
+                  <span>またはクリックして選ぶ</span>
+                </span>
+              </label>
+              <input type="file" id="import-file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain" hidden>
+              <div class="paste-box">
+                <label class="paste-label" for="import-text">または、スプレッドシートの表をコピーして貼り付け</label>
+                <textarea id="import-text" rows="3" placeholder="表示名&#9;元の名前&#9;カレンダーID&#9;権限&#9;色コード"></textarea>
+                <button id="import-parse-text" class="btn btn-sm" type="button">貼り付けた表を読み込む</button>
+              </div>
+            </div>
+            <div id="import-source" class="source" hidden>
+              <span class="source-icon" aria-hidden="true"></span>
+              <span id="import-file-name" class="source-name"></span>
+              <button id="import-clear" class="btn btn-ghost btn-sm" type="button">クリア</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <h2 class="step-title"><span class="step-no" aria-hidden="true">02</span>登録する内容を確認する</h2>
+          <p class="step-help">☑が付いた行だけが登録・更新されます。表示名や色が空の行は「変更しない」として扱います。</p>
+          <div class="step-body">
+            <div class="filters">
+              <div class="filter-group">
+                <div id="import-summary" class="tally"></div>
+                <label class="chip"><input type="checkbox" id="import-show-in-sidebar" checked> 登録後にサイドバーで表示する</label>
+              </div>
+              <div class="filter-actions">
+                <button id="import-select-all" class="btn btn-ghost" type="button">すべて選択</button>
+                <button id="import-select-none" class="btn btn-ghost" type="button">選択解除</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="grid" id="import-table">
+                <thead>
+                  <tr>
+                    <th class="col-check"><span class="sr-only">選択</span></th>
+                    <th class="col-color">色</th>
+                    <th class="col-name">表示名</th>
+                    <th>カレンダーID</th>
+                    <th class="col-action">操作</th>
+                    <th class="col-result">結果</th>
+                  </tr>
+                </thead>
+                <tbody id="import-body">
+                  <tr><td colspan="6" class="empty">リストを読み込むと、行ごとの操作がここに表示されます。</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="action-bar">
+        <div class="wrap action-bar-inner">
+          <div class="action-status">
+            <h2 class="step-title"><span class="step-no" aria-hidden="true">03</span>登録する</h2>
+            <span id="import-target-count" class="count"></span>
+            <div class="progress" id="import-progress" hidden>
+              <div class="progress-bar"><div id="import-progress-fill" class="progress-fill"></div></div>
+              <span id="import-progress-text"></span>
+            </div>
+            <span id="import-result-summary" class="result-summary" hidden></span>
+          </div>
+          <div class="action-buttons">
+            <button id="import-show-result" class="btn" type="button" hidden>結果を表示</button>
+            <button id="import-cancel" class="btn" type="button" hidden>中断</button>
+            <button id="import-retry" class="btn" type="button" hidden>失敗分を再試行</button>
+            <button id="import-run" class="btn btn-primary" type="button" disabled>登録する</button>
+          </div>
+          <div id="import-confirm" class="confirm" hidden>
+            <span id="import-confirm-text"></span>
+            <span class="confirm-buttons">
+              <button id="import-confirm-no" class="btn btn-sm" type="button">キャンセル</button>
+              <button id="import-confirm-yes" class="btn btn-primary btn-sm" type="button">実行する</button>
+            </span>
+          </div>
+        </div>
+      </footer>
+    </section>
+  </main>
+
+  <!-- 実行結果（サンドボックスiframeでは alert が使えないためページ内のダイアログで表示） -->
+  <div id="result-modal" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="result-title">
+      <div class="modal-header">
+        <h2 id="result-title">登録結果</h2>
+        <button id="result-close-x" class="icon-btn" type="button" aria-label="閉じる">×</button>
+      </div>
+      <p id="result-summary" class="result-lead"></p>
+      <div id="result-failed-wrap">
+        <h3>登録できなかったカレンダー</h3>
+        <div class="table-wrap modal-table">
+          <table class="grid" id="result-failed-table">
+            <thead><tr><th>表示名</th><th>カレンダーID</th><th>理由</th></tr></thead>
+            <tbody id="result-failed-body"></tbody>
+          </table>
+        </div>
+        <p class="hint">「共有されていません」は、そのカレンダーがあなたに共有されていない状態です。配布した人に共有を依頼してください。</p>
+      </div>
+      <div class="modal-actions">
+        <button id="result-copy-failed" class="btn" type="button">失敗一覧をコピー</button>
+        <button id="result-copy-all" class="btn" type="button">全結果をコピー</button>
+        <button id="result-download" class="btn" type="button">結果CSVをダウンロード</button>
+        <span class="spacer"></span>
+        <button id="result-close" class="btn btn-primary" type="button">閉じる</button>
+      </div>
+      <p id="result-copy-message" class="hint" role="status"></p>
+    </div>
+  </div>
+
+  <footer class="app-footer wrap" id="app-footer" hidden>
+    <details>
+      <summary>困ったときは</summary>
+      <ul>
+        <li>ログインは約1時間で切れます。切れたらもう一度ログインしてください。</li>
+        <li>操作したいアカウントと違う場合は、右上のアカウント名から「別のアカウントに切り替え」を選びます。</li>
+        <li>Safariで「現在、ファイルを開くことができません」と出る場合は、設定 → プライバシー →「サイト越えトラッキングを防ぐ」を一時的にオフにするか、Chromeを使ってください。</li>
+      </ul>
+    </details>
+  </footer>
+
+  <!-- 表題欄：資料名／発行／版／頁。版は公開のたびに更新する -->
+  <div class="wrap titleblock-wrap">
+    <div class="titleblock" aria-label="表題欄">
+      <div class="tb-cell tb-name"><small>資料名</small><b>カレンダー一括登録</b></div>
+      <div class="tb-cell tb-issuer"><small>発行</small><b>配信者</b></div>
+      <div class="tb-cell tb-version"><small>版</small><span class="mono">v1.0 · 2026-09-20</span></div>
+      <div class="tb-cell tb-page"><small>頁</small><span class="mono" id="tb-page">表紙</span></div>
+    </div>
+  </div>
+
+  <script>
+    // OAuth クライアント ID と、リダイレクト先になるこのアプリのURL（サーバー側テンプレートから埋め込み）。
+    window.__CLIENT_ID__ = <?!= JSON.stringify(clientId) ?>;
+    window.__APP_URL__ = <?!= JSON.stringify(appUrl) ?>;
+  </script>
+  <?!= includeFile('app') ?>
+</body>
+</html>

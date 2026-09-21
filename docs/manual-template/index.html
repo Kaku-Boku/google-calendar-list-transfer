@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>カレンダー一括登録 操作マニュアル</title>
+<!-- 読む資料。リンクとQRコードは manual:prepare が同じURLから生成する。
+     document.css と manual.css はこの原稿と一緒に管理する。
+     PDF は scripts/manual/pdf.mjs が Paged.js ＋ Chrome で生成する（表題欄・頁番号は紙にだけ出る）。
+     画面写真は scripts/manual/shots.mjs が src/ の実物から生成する。名前・メールアドレス・カレンダーはすべて説明用のサンプル。 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Barlow+Condensed:wght@700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="document.css">
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+<span class="doc-id" hidden>M-01</span>
+<!-- 紙の表題欄（全ページ下端。Paged.js の running element） -->
+<div class="titleblock"><div class="titleblock__grid">
+  <div><small>資料名</small><b>カレンダー一括登録 操作マニュアル</b></div>
+  <div><small>発行</small><b>配信者</b></div>
+  <div><small>版</small><span class="mono">v1.0 · 2026-09-20</span></div>
+  <div><small>頁</small><span class="mono page"></span></div>
+</div></div>
+
+<main class="doc">
+
+  <!-- ================= 表紙面 ================= -->
+  <section class="cover-page">
+    <p class="doc-id">M-01</p>
+    <h1>カレンダー一括登録<br>操作マニュアル</h1>
+    <p class="subtitle">チームのカレンダーを、同じ名前と色で</p>
+    <div class="shu-line"></div>
+    <p class="lead">チームで使う Google カレンダーの「表示名と色」を、配る人が一覧にして、受け取った人が自分のカレンダーにまとめて登録するための手順書です。予定の中身は読み書きしません。</p>
+    <ul class="cover-meta">
+      <li>対応ブラウザー：Google Chrome 推奨</li>
+      <li>触るのはカレンダーリスト（表示名・色）だけ</li>
+      <li>画面写真の朱の枠と番号 ＝ 説明の番号</li>
+    </ul>
+
+    <section class="access" aria-label="アプリのURL">
+      <div>
+        <p class="access-label">アプリはここから開く</p>
+        <a class="access-url" href="{{WEB_APP_URL}}" target="_blank" rel="noopener">{{WEB_APP_URL}}</a>
+        <p class="access-hint">Google Chrome で開いてください。ブックマークしておくと次回から探さずに済みます。スマートフォンでは右の QR コードを読み取ります。</p>
+      </div>
+      <div class="qr">{{WEB_APP_QR}}</div>
+    </section>
+
+    <h2>全体の流れ</h2>
+    <div class="flow" aria-label="全体の流れ">
+      <span class="node">配る人が<br>CSV を作る</span><span class="arrow">→</span>
+      <span class="node">メールやチャットで<br>渡す</span><span class="arrow">→</span>
+      <span class="node">受け取った人が<br>CSV を登録する</span><span class="arrow">→</span>
+      <span class="goal">全員が<br>同じ名前・<br>同じ色に</span>
+    </div>
+
+    <h2>自分の役割から読む</h2>
+    <div class="roles">
+      <a href="#login"><span class="who">全員</span><h3>1. ログインする</h3><p>最初に必ず通る画面。未確認アプリの警告を確認する手順もここ。</p></a>
+      <a href="#export"><span class="who">配布する人</span><h3>2. リストを作って配る</h3><p>自分のカレンダーに名前を付け、登録してほしいカレンダーを選んで CSV にする。</p></a>
+      <a href="#import"><span class="who">受け取った人</span><h3>3. リストを登録する</h3><p>受け取った CSV を読み込み、「登録する」を押すだけ。</p></a>
+    </div>
+
+    <nav aria-label="目次">
+      <ul class="toc">
+        <li><a href="#login">1. ログインする</a></li>
+        <li><a href="#export">2. リストを作って配る</a></li>
+        <li><a href="#import">3. リストを登録する</a></li>
+        <li><a href="#trouble">4. 困ったとき</a></li>
+        <li><a href="#spec">付録：ファイルの形式</a></li>
+      </ul>
+    </nav>
+  </section>
+
+  <!-- ================= 1. ログイン ================= -->
+  <section class="chapter" id="login">
+    <div class="chapter-head"><span class="chapter-label">Chapter 1</span><h2>ログインする</h2><span class="chip">全員</span></div>
+    <p class="chapter-intro">配る人も受け取る人も同じ手順です。アプリの URL を Chrome で開くところから始めます。</p>
+
+    <div class="step">
+      <div class="pair">
+        <h3 class="step-title"><span class="step-no">01</span>「Googleでログイン」を押す</h3>
+        <figure class="shot"><img src="img/01-login.png" alt="アプリの最初の画面。Googleでログインボタンに朱の枠"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span><b>Googleでログイン</b> を押す。<span class="sub">Google のアカウント選択画面に移動します。</span></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="pair pair--side">
+        <h3 class="step-title"><span class="step-no">02</span>操作したいアカウントを選ぶ</h3>
+        <figure class="shot narrow"><img src="img/02-chooser.png" alt="Googleのアカウント選択画面"><figcaption>画面イメージ（実際の表示と細部が異なることがあります）</figcaption></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span><b>カレンダーを操作したいアカウント</b>を押す。<span class="sub">複数のアカウントでログインしている人は、ここで間違えないように。会社のアカウントで登録したいなら会社のアカウントを選びます。</span></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3 class="step-title"><span class="step-no">03</span>「このアプリは Google で確認されていません」が出たら</h3>
+      <div class="callout callout--note"><p class="callout-label">注</p><p>このアプリは Google の確認を受けていないため、警告が出ることがあります。<b>表示されたアプリ名、配信者、アクセス権を確認し、信頼できる場合だけ</b>次の手順で進めてください。</p></div>
+      <div class="pair pair--side">
+        <figure class="shot narrow"><img src="img/03-warn.png" alt="確認されていませんの警告画面。詳細リンクに朱の枠"><figcaption>画面イメージ</figcaption></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span>左下の小さな <b>「詳細」</b> を押す。<span class="sub">青い「安全なページに戻る」は押さない（押すと最初に戻ります）。</span></span></li>
+        </ul>
+      </div>
+      <div class="pair pair--side">
+        <figure class="shot narrow"><img src="img/04-warn-open.png" alt="詳細を開いた状態。カレンダー一括登録（安全ではないページ）に移動リンクに朱の枠"><figcaption>画面イメージ</figcaption></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span>「詳細」が「詳細を非表示」に変わり、下に文章が増えます。</span></li>
+          <li><span class="mark">2</span><span><b>「カレンダー一括登録（安全ではないページ）に移動」</b> を押す。</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="pair">
+        <h3 class="step-title"><span class="step-no">04</span>「続行」で許可する</h3>
+        <figure class="shot"><img src="img/05-consent.png" alt="アクセス許可の画面。黄色い注意書きと続行ボタンに番号"><figcaption>画面イメージ（実際の表示と細部が異なることがあります）</figcaption></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span>黄色の <b>「このアプリは Google で検証されていません」</b> が出たら、アプリ名と要求されるアクセス権を確認します。<span class="sub">心当たりがない場合は続行しないでください。</span></span></li>
+          <li><span class="mark">2</span><span>右下の <b>続行</b> を押す。<span class="sub">許可するのは「登録しているカレンダーの参照・新規登録・登録解除」だけ。予定の中身は読めません。</span></span></li>
+        </ul>
+      </div>
+      <div class="callout callout--tip"><p class="callout-label">参考</p><p>同じアカウント・同じブラウザーなら、2 回目以降は手順 03〜04 が出ないことがあります。出たら同じように進めてください。</p></div>
+    </div>
+
+    <div class="done"><span class="circle">✓</span><span>アプリの画面に戻り、右上に自分のメールアドレスが出ていればログイン完了</span></div>
+  </section>
+
+  <!-- ================= 2. 配布する人 ================= -->
+  <section class="chapter" id="export">
+    <div class="chapter-head"><span class="chapter-label">Chapter 2</span><h2>リストを作って配る</h2><span class="chip">配布する人</span></div>
+    <p class="chapter-intro">まず自分のカレンダーに「受け取った人に見せる名前」を付け、次に登録してほしいカレンダーを選んで名前と色を整え、CSV にします。ここでの編集で<b>自分のカレンダー設定は変わりません</b>。</p>
+
+    <div class="step">
+      <div class="pair">
+        <h3 class="step-title"><span class="step-no">01</span>自分のカレンダーに、受け取った人へ見せる名前を付ける</h3>
+        <figure class="shot"><img src="img/10-export-self.png" alt="配布する人タブの上部。自分のカレンダーの名前と色の入力欄に番号"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span><b>操作中のアカウント</b>。<span class="sub">違うアカウントなら、ここを押して「別のアカウントに切り替え」。</span></span></li>
+          <li><span class="mark">2</span><span><b>「配布する人 / リストを作る」タブ</b>が選ばれている（下線が付いている）ことを確認。<span class="sub">ログイン直後はこのタブが開きます。</span></span></li>
+          <li><span class="mark">3</span><span><b>受け取った人に見せる名前</b>を入れる。<span class="sub">例：「山田 太郎（営業）」。空のままだと、受け取った人の一覧にはあなたのメールアドレスがそのまま出ます。</span></span></li>
+          <li><span class="mark">4</span><span><b>色</b>：受け取った人のカレンダーで、あなたの予定に付く色。<span class="sub">色見本を押して選ぶか、色コードを入力。</span></span></li>
+          <li><span class="mark">5</span><span><b>受け取った人にも、あなたのカレンダーを登録してもらう</b>：通常は☑のまま。<span class="sub">自分の予定を見せる必要がないときだけ外します。外した場合、名前は空のままで構いません。</span></span></li>
+        </ul>
+      </div>
+      <div class="callout callout--important"><p class="callout-label">■ 重要</p><p>自分のカレンダーは、<b>あなたが共有しないと相手からは見えません</b>。Google カレンダーの設定「特定のユーザーまたはグループと共有」で、受け取る人に先に共有しておいてください。</p></div>
+    </div>
+
+    <div class="step">
+      <div class="pair">
+        <h3 class="step-title"><span class="step-no">02</span>登録してもらうカレンダーを選ぶ</h3>
+        <figure class="shot"><img src="img/11-export-list.png" alt="カレンダーの一覧と画面下のボタン。各部に番号"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span><b>あなたのカレンダー</b>は先頭に固定されます。<span class="sub">名前と色は 01 で決めたもの。「01で変える」を押すと入力欄に戻ります。</span></span></li>
+          <li><span class="mark">2</span><span><b>☑</b> ＝ リストに入れるカレンダー。<span class="sub">最初から☑が入っているのは「他の人から共有されているカレンダー」。自分がオーナーのカレンダーは☑なしで始まるので、配りたいものは☑を入れます。</span></span></li>
+          <li><span class="mark">3</span><span><b>表示名</b> ＝ 受け取った人のカレンダーに出る名前。<span class="sub">書き換えられます。</span></span></li>
+          <li><span class="mark">4</span><span><b>色</b> ＝ 受け取った人のカレンダーに付く色。</span></li>
+          <li><span class="mark">5</span><span><b>CSVをダウンロード</b> ＝ 配るファイルを作る（メールに添付する場合はこちら）。</span></li>
+          <li><span class="mark">6</span><span><b>表としてコピー</b> ＝ スプレッドシートに貼り付ける場合はこちら。</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="pair">
+        <h3 class="step-title"><span class="step-no">03</span>名前と色を整える</h3>
+        <figure class="shot"><img src="img/12-export-edit.png" alt="表示名と色を編集した状態。各部に番号"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span><b>検索</b>：カレンダーが多いときは名前や ID で絞り込めます。</span></li>
+          <li><span class="mark">2</span><span><b>自分がオーナーのカレンダー</b>／<b>非表示のカレンダー</b>：☑を外すと、その種類のカレンダーを一覧から隠せます。<span class="sub">最初はどちらも☑で、すべてのカレンダーが出ています。</span></span></li>
+          <li><span class="mark">3</span><span><b>表示名を書き換える</b>。<span class="sub">例：「会議室A」→「【共用】会議室A（3F）」。空にすると受け取った人の名前は変えません。</span></span></li>
+          <li><span class="mark">4</span><span><b>色を変える</b>：色見本を押して選ぶか、<code>#e67c73</code> のような色コードを入力。<span class="sub">右のコピーアイコンで色コードをコピーできます。</span></span></li>
+          <li><span class="mark">5</span><span><b>まとめて同じ色に</b>：☑の行すべてに同じ色を付けたいときは、色を選んで「適用」。</span></li>
+          <li><span class="mark">6</span><span><b>一覧にないカレンダーを追加</b>：カレンダー ID・表示名・色を入れて「追加」。<span class="sub">ID は Google カレンダーの設定画面「カレンダーの統合」に載っています。</span></span></li>
+        </ul>
+      </div>
+      <div class="callout callout--important"><p class="callout-label">■ 重要</p><p>受け取った人が登録できるのは、<b>そのカレンダーが受け取った人に共有されている場合だけ</b>です。共有は Google カレンダー側の「特定のユーザーまたはグループと共有」で先に済ませておいてください。</p></div>
+    </div>
+
+    <div class="step">
+      <div class="pair">
+        <h3 class="step-title"><span class="step-no">04</span>CSV をダウンロードして配る</h3>
+        <figure class="shot"><img src="img/14-export-done.png" alt="CSVをダウンロードしましたのメッセージ"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span>画面下の <b>CSVをダウンロード</b> を押すと、このメッセージが出てファイルが保存されます。<span class="sub">ファイル名は <code>calendar-list-日付.csv</code>。Excel でそのまま開けます。</span></span></li>
+        </ul>
+      </div>
+      <div class="callout callout--warning"><p class="callout-label">△ 注意</p><p>01 の名前が空のまま「CSVをダウンロード」を押すと、「あなたのカレンダーの名前が空です」と出て止まります。名前を入れるか、01 の☑を外してからもう一度押してください。</p></div>
+      <p>保存したファイルを、メールやチャットで受け取る人に渡してください。スプレッドシートで共有したいときは「表としてコピー」→ シートに貼り付けでも構いません。</p>
+    </div>
+
+    <div class="done"><span class="circle">✓</span><span>CSV を渡したら、配布する人の作業は終わりです</span></div>
+  </section>
+
+  <!-- ================= 3. 受け取った人 ================= -->
+  <section class="chapter" id="import">
+    <div class="chapter-head"><span class="chapter-label">Chapter 3</span><h2>リストを登録する</h2><span class="chip">受け取った人</span></div>
+    <p class="chapter-intro">受け取った CSV を読み込んで「登録する」を押すと、自分のカレンダーに一覧の名前と色で追加されます。</p>
+
+    <div class="step">
+      <div class="pair">
+        <h3 class="step-title"><span class="step-no">01</span>「受け取った人」タブで、ファイルを読み込む</h3>
+        <figure class="shot"><img src="img/20-import-empty.png" alt="受け取った人タブ。ドロップ領域と貼り付け欄に番号"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span><b>「受け取った人 / リストを登録する」タブ</b>を押す。</span></li>
+          <li><span class="mark">2</span><span>受け取った CSV を<b>この枠にドラッグ＆ドロップ</b>。<span class="sub">または枠を押してファイルを選ぶ。</span></span></li>
+          <li><span class="mark">3</span><span>スプレッドシートで受け取った場合は、表をコピーして<b>ここに貼り付け</b> → 「貼り付けた表を読み込む」。<span class="sub">このタブを開いたまま Ctrl+V（Mac は ⌘V）でも読み込めます。</span></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="pair">
+        <h3 class="step-title"><span class="step-no">02</span>登録される内容を確認する</h3>
+        <figure class="shot"><img src="img/21-import-loaded.png" alt="CSV読み込み後。行ごとの操作に番号"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span>読み込んだファイル名と行数。<span class="sub">間違えたら「クリア」。</span></span></li>
+          <li><span class="mark">2</span><span><b>件数の内訳</b>。<span class="sub">「登録後にサイドバーで表示する」の☑は、登録したカレンダーをすぐサイドバーに出すための設定です（通常はそのまま）。</span></span></li>
+          <li><span class="mark">3</span><span><b>■ 新規</b>：これから自分のカレンダーに追加される行。<span class="sub">配布した人のカレンダーは、その人が決めた名前（例：「山田 太郎（営業）」）で登録されます。</span></span></li>
+          <li><span class="mark">4</span><span><b>■ 更新</b>：すでに登録済みで、名前や色だけ変わる行。<span class="sub">何が変わるかは下に小さく出ます（例：表示名）。</span></span></li>
+          <li><span class="mark">5</span><span><b>○ 変更なし</b>：すでに同じ名前・色なので何もしない行。</span></li>
+          <li><span class="mark">6</span><span><b>○ 対象外</b> ／ <b>× エラー</b>：登録しない行。<span class="sub">自分自身のカレンダーや、ID がおかしい行。放っておいて大丈夫です。</span></span></li>
+          <li><span class="mark">7</span><span><b>登録する</b> を押す。<span class="sub">☑が付いた行だけが登録されます。登録したくない行は☑を外してから押してください。</span></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="pair">
+        <h3 class="step-title"><span class="step-no">03</span>「実行する」で登録を始める</h3>
+        <figure class="shot"><img src="img/22-import-confirm.png" alt="確認の行。登録先アカウントと実行するボタンに番号"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span><b>登録先のアカウント</b>（メールアドレス）が合っているか確認。<span class="sub">違うときは「キャンセル」→ 右上のアカウント名から切り替え。</span></span></li>
+          <li><span class="mark">2</span><span><b>実行する</b> を押す。</span></li>
+        </ul>
+      </div>
+      <div class="pair">
+        <figure class="shot"><img src="img/23-import-running.png" alt="登録の実行中。進み具合と中断ボタンに番号"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span>進み具合。<span class="sub">1 件ずつ順番に登録します。終わるまでこの画面を閉じないでください。</span></span></li>
+          <li><span class="mark">2</span><span><b>中断</b>：途中でやめたいとき。<span class="sub">すでに登録した分はそのまま残ります。</span></span></li>
+          <li><span class="mark">3</span><span>行ごとの結果。<span class="sub">「✓ 登録済」「✓ 更新済」と出れば成功です。</span></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="pair">
+        <h3 class="step-title"><span class="step-no">04</span>結果を確認する</h3>
+        <figure class="shot"><img src="img/24-import-result.png" alt="登録結果ダイアログ。各部に番号"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span>成功・失敗の件数。<span class="sub">失敗が 0 件なら「登録が完了しました」と出ます。</span></span></li>
+          <li><span class="mark">2</span><span><b>登録できなかったカレンダーと理由</b>。<span class="sub">「見つからない、または共有されていません」＝ そのカレンダーが自分に共有されていない状態。</span></span></li>
+          <li><span class="mark">3</span><span><b>失敗一覧をコピー</b>：配布した人に「共有してください」と伝えるとき、これを貼り付けると早いです。</span></li>
+          <li><span class="mark">4</span><span><b>閉じる</b>。</span></li>
+        </ul>
+      </div>
+      <div class="pair">
+        <figure class="shot"><img src="img/25-import-after.png" alt="実行後の下部の行。結果を表示と失敗分を再試行ボタンに番号"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span>閉じた後も、画面下に結果が残ります。</span></li>
+          <li><span class="mark">2</span><span><b>結果を表示</b>：さっきのダイアログをもう一度開く。</span></li>
+          <li><span class="mark">3</span><span><b>失敗分を再試行</b>：配布した人に共有してもらった後、ここを押せば失敗した行だけやり直せます。</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="done"><span class="circle">✓</span><span>Google カレンダーを開くと、サイドバーに一覧の名前と色でカレンダーが並んでいます</span></div>
+  </section>
+
+  <!-- ================= 4. 困ったとき ================= -->
+  <section class="chapter" id="trouble">
+    <div class="chapter-head"><span class="chapter-label">Chapter 4</span><h2>困ったとき</h2></div>
+    <div class="qa">
+      <div class="item">
+        <h3>「このアプリは Google で確認されていません」と赤い三角の警告が出た</h3>
+        <p>Google の確認を受けていないアプリでは表示されることがあります。アプリ名、配信者、アクセス権を確認し、信頼できる場合だけ<b>「詳細」→「カレンダー一括登録（安全ではないページ）に移動」→「続行」</b>の順に進んでください。詳しくは <a href="#login">1. ログインする</a> の手順 03〜04。</p>
+        <p class="sub">「安全なページに戻る」を押してしまったら、アプリの URL を開き直して「Googleでログイン」からやり直します。</p>
+      </div>
+      <div class="item">
+        <h3>「ログインの有効期限が切れました」と出た</h3>
+        <p>ログインは<b>約 1 時間</b>で切れます。もう一度「Googleでログイン」を押してください。登録の途中で切れないよう、長時間放置した後は先にログインし直すのが安全です。</p>
+        <figure class="shot mid"><img src="img/30-expired.png" alt="ログインの有効期限が切れましたのメッセージ"></figure>
+      </div>
+      <div class="item">
+        <h3>右上のアカウントが、操作したいアカウントと違う</h3>
+        <p>右上のアカウント名を押し、<b>「別のアカウントに切り替え」</b>を選ぶと Google のアカウント選択画面が開きます。</p>
+        <figure class="shot mid"><img src="img/13-account-menu.png" alt="アカウントメニュー。各項目に番号"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span>アカウント名を押すとメニューが開く。</span></li>
+          <li><span class="mark">2</span><span><b>カレンダーを再読み込み</b>：Google カレンダー側で共有や名前を変えた後、一覧を最新にする。</span></li>
+          <li><span class="mark">3</span><span><b>別のアカウントに切り替え</b>。</span></li>
+          <li><span class="mark">4</span><span><b>ログアウト</b>：このアプリのログインだけ解除します（Google 自体からはログアウトしません）。</span></li>
+        </ul>
+      </div>
+      <div class="item">
+        <h3>「あなたのカレンダーの名前が空です」と出て CSV を作れない</h3>
+        <p>自分のカレンダーを受け取った人にも登録してもらう設定（01 の☑）なのに、名前が入っていない状態です。<b>01 の入力欄に名前を入れる</b>か、自分のカレンダーを配らないなら☑を外してから、もう一度「CSVをダウンロード」を押してください。</p>
+        <figure class="shot mid"><img src="img/15-export-self-error.png" alt="名前が空のときのメッセージと入力欄のエラー"></figure>
+        <ul class="legend">
+          <li><span class="mark">1</span><span>画面上部のメッセージ。</span></li>
+          <li><span class="mark">2</span><span>空の入力欄が朱の枠で示されます。ここに名前を入れます。</span></li>
+        </ul>
+      </div>
+      <div class="item">
+        <h3>「見つからない、または共有されていません」で登録に失敗した</h3>
+        <p>そのカレンダーが<b>あなたに共有されていない</b>状態です。配布した人（またはカレンダーの管理者）に、Google カレンダー側であなたへの共有を依頼してください。共有されたら「失敗分を再試行」で登録できます。</p>
+      </div>
+      <div class="item">
+        <h3>「現在、ファイルを開くことができません」と出てアプリが開かない</h3>
+        <p><b>Safari</b> の場合：設定 → プライバシー →「サイト越えトラッキングを防ぐ」を一時的にオフにするか、<b>Chrome で開いて</b>ください。</p>
+        <p><b>Chrome</b> でサードパーティ Cookie をすべてブロックしている場合：<code>script.google.com</code> と <code>googleusercontent.com</code> を許可します。</p>
+      </div>
+      <div class="item">
+        <h3>CSV をドロップしても読み込めない／文字化けする</h3>
+        <p>文字コード（UTF-8 / Shift_JIS）と区切り（カンマ / タブ）は自動判定します。それでも読めない場合は、Excel やスプレッドシートで開いて表をコピーし、<b>貼り付け欄に貼り付け</b>てください。</p>
+      </div>
+      <div class="item">
+        <h3>登録したのにサイドバーに出てこない</h3>
+        <p>Google カレンダーの画面を再読み込みしてください。それでも出ない場合、登録時に「登録後にサイドバーで表示する」の☑が外れていた可能性があります。もう一度☑を入れて登録すると表示されます。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 付録 ================= -->
+  <section class="chapter" id="spec">
+    <div class="chapter-head"><span class="chapter-label">Appendix</span><h2>ファイルの形式</h2></div>
+    <p class="chapter-intro">配布する CSV は次の 5 列です。自分でスプレッドシートから作る場合も、この並びなら読み込めます。</p>
+    <table>
+      <thead><tr><th class="num">列</th><th>内容</th><th>登録時の扱い</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td>表示名</td><td>この名前で登録（空なら名前は変えない）</td></tr>
+        <tr><td class="num">2</td><td>正規のカレンダー名</td><td>参考情報（使わない）</td></tr>
+        <tr><td class="num">3</td><td>メールアドレス / カレンダーID</td><td><b>必須</b>。例：<code>xxx@group.calendar.google.com</code></td></tr>
+        <tr><td class="num">4</td><td>アクセス権限</td><td>参考情報（使わない）</td></tr>
+        <tr><td class="num">5</td><td>カラーコード</td><td><code>#rrggbb</code> 形式。空なら色は変えない</td></tr>
+      </tbody>
+    </table>
+    <p>CSVを表計算ソフトで開くときに名前が数式として実行されないよう、出力時は必要なセルの先頭に <code>'</code> を付けます。このアプリに再読み込みすると元の名前に戻ります。</p>
+    <p class="colophon">アプリの画面は実際のものです。Google のログイン・警告・許可画面は「画面イメージ」として再現したもので、実際の表示と細部が異なることがあります。画面内の名前・メールアドレス・カレンダーはすべて説明用のサンプルです。</p>
+  </section>
+
+  <!-- 画面の表題欄（頁のない媒体なので 3 セル） -->
+  <div class="titleblock-screen" aria-label="表題欄">
+    <div><small>資料名</small><b>カレンダー一括登録 操作マニュアル</b></div>
+    <div><small>発行</small><b>配信者</b></div>
+    <div><small>版</small><span class="mono">v1.0 · 2026-09-20 · M-01</span></div>
+  </div>
+</main>
+</body>
+</html>

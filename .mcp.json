@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "gas_clasp": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/scripts/clasp.mjs", "mcp"]
+    }
+  }
+}
