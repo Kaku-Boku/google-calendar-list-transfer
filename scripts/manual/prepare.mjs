@@ -4,11 +4,13 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
+import { readManualConfig } from './config.mjs';
 
 const projectDir = fileURLToPath(new URL('../../', import.meta.url));
 const templateDir = join(projectDir, 'docs', 'manual-template');
 const outputDir = join(projectDir, 'docs', 'manual');
 const deploymentFile = join(projectDir, 'tooling', 'deployment.json');
+const { publisher } = readManualConfig();
 
 let explicitUrl = '';
 for (let i = 2; i < process.argv.length; i++) {
@@ -26,12 +28,17 @@ if (!webAppUrl) {
 }
 
 const parsed = new URL(webAppUrl);
-if (parsed.protocol !== 'https:' || parsed.hostname !== 'script.google.com' ||
-    !/^\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(parsed.pathname) ||
+// /macros/s/<id>/exec でも /a/~/macros/s/<id>/exec でも受け取る。
+const pathMatch = /^(?:\/a\/~)?\/macros\/s\/([A-Za-z0-9_-]+)\/exec$/.exec(parsed.pathname);
+if (parsed.protocol !== 'https:' || parsed.hostname !== 'script.google.com' || !pathMatch ||
     parsed.search || parsed.hash || parsed.username || parsed.password) {
   throw new Error('WebアプリURLは https://script.google.com/macros/s/<deploymentId>/exec 形式で指定してください。');
 }
-webAppUrl = parsed.href;
+// 複数のGoogleアカウントでログインしているブラウザーでは、/macros/s/... が /macros/u/<番号>/s/... へ
+// 書き換えられ「ページが見つかりません」になる。/a/~/ を挟むとアカウントに依存しない形で開けるため、
+// 配布用URLはこちらに正規化する。この形もOAuthクライアントの承認済みリダイレクトURIに登録しておくこと
+// （README「初回接続」の手順5）。
+webAppUrl = `https://script.google.com/a/~/macros/s/${pathMatch[1]}/exec`;
 
 const escapeHtml = (value) => value.replace(/[&<>"']/g, (ch) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -43,14 +50,18 @@ const qr = await QRCode.toString(webAppUrl, {
 
 const template = readFileSync(join(templateDir, 'index.html'), 'utf8');
 if ((template.match(/\{\{WEB_APP_URL\}\}/g) || []).length !== 2 ||
-    (template.match(/\{\{WEB_APP_QR\}\}/g) || []).length !== 1) {
-  throw new Error('マニュアル原稿のURL・QRプレースホルダーを確認してください。');
+    (template.match(/\{\{WEB_APP_QR\}\}/g) || []).length !== 1 ||
+    (template.match(/\{\{PUBLISHER\}\}/g) || []).length !== 1) {
+  throw new Error('マニュアル原稿のURL・QR・発行者プレースホルダーを確認してください。');
 }
 const html = template.replaceAll('{{WEB_APP_URL}}', escapeHtml(webAppUrl))
-  .replace('{{WEB_APP_QR}}', qr);
+  .replace('{{WEB_APP_QR}}', qr)
+  .replace('{{PUBLISHER}}', escapeHtml(publisher));
 mkdirSync(outputDir, { recursive: true });
 for (const name of ['document.css', 'manual.css']) {
   copyFileSync(join(templateDir, name), join(outputDir, name));
 }
 writeFileSync(join(outputDir, 'index.html'), html);
 console.log('ローカルマニュアルを生成しました:', outputDir);
+console.log('配布URL:', webAppUrl);
+console.log('このURLがOAuthクライアントの承認済みリダイレクトURIに登録されているか確認してください。');

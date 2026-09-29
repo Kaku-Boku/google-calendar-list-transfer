@@ -13,6 +13,7 @@ credentials*.json
 .claude/settings.local.json
 CLAUDE.local.md
 tooling/deployment.json
+tooling/manual.json
 /src/LocalConfig.js
 /docs/manual/
 /docs/webapp-plan.md

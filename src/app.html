@@ -109,7 +109,21 @@
   // 選んだアカウントのトークンを取得する。トークンはメモリにだけ保持する。
   // =====================================================================
   var CLIENT_ID = String(window.__CLIENT_ID__ || '');
-  var APP_URL = String(window.__APP_URL__ || '');
+  /**
+   * ログイン後の戻り先を、アカウントに依存しない /a/~/ 形式に揃える。
+   * 複数のGoogleアカウントでログインしているブラウザーでは、script.google.com が
+   * https://script.google.com/macros/s/<ID>/exec を /macros/u/<番号>/s/<ID>/exec へ書き換えるため、
+   * 短い形のURLに戻すとログイン直後に「現在、ファイルを開くことができません。」になる。
+   * /a/~/ を挟んだ形は書き換えられない。両方の形をOAuthクライアントの
+   * 承認済みリダイレクトURIに登録しておくこと（README「配布用URLの形」）。
+   * @param {string} url
+   * @returns {string}
+   */
+  function accountAgnosticUrl(url) {
+    var m = /^https:\/\/script\.google\.com(?:\/a\/~)?\/macros\/s\/([A-Za-z0-9_-]+)\/exec$/.exec(String(url || ''));
+    return m ? 'https://script.google.com/a/~/macros/s/' + m[1] + '/exec' : String(url || '');
+  }
+  var APP_URL = accountAgnosticUrl(window.__APP_URL__);
   var SCOPE = 'https://www.googleapis.com/auth/calendar.calendarlist';
   var STATE_KEY = 'calendar-bulk-registration.oauth-state';
   var auth = { token: '', expiresAt: 0 };

@@ -23,6 +23,7 @@
     "check": "tsc --project jsconfig.json --noEmit",
     "check:config": "node scripts/check-config.mjs",
     "check:mcp": "node scripts/check-mcp.mjs",
+    "setup": "node scripts/setup-local.mjs",
     "setup:codex": "node scripts/setup-codex.mjs",
     "manual:prepare": "node scripts/manual/prepare.mjs",
     "manual:shots": "node scripts/manual/shots.mjs",

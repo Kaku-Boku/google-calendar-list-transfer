@@ -14,14 +14,20 @@ Google カレンダーの「登録済みカレンダー一覧」を CSV で受�
 
 Node.js 20 以降、Google アカウント、Google Cloud プロジェクト、Google Chrome が必要です。各自の OAuth クライアントとデプロイを使います。
 
-1. `npm ci` を実行します。
+1. `npm ci` を実行し、続けて `npm run setup -- --publisher "発行者名"` を実行します。発行者名は Git 対象外の `tooling/manual.json` に保存され、操作マニュアルの表題欄だけに使われます。Codex 用のローカル設定も同時に作る場合は、代わりに `npm run setup:codex -- --publisher "発行者名"` を使えます。
 2. Google Cloud で **Google Calendar API** を有効にし、外部向けの OAuth 同意画面と「ウェブアプリケーション」型の OAuth クライアントを作ります。アプリが求める権限は `https://www.googleapis.com/auth/calendar.calendarlist` です。
 3. `tooling/LocalConfig.example.js` を `src/LocalConfig.js` にコピーし、**自分の** OAuth クライアント ID と問い合わせ先メールアドレスに書き換えます。`src/LocalConfig.js` は Git 対象外ですが、GAS にはアップロードされます。クライアントシークレットは使いません。
 4. [Apps Script API を有効化](https://script.google.com/home/usersettings)してから、`npm run gas:login`、`npm run gas:create`、`npm run gas:deploy` を順に実行します。ログイン時の認可コードやトークンを他人に渡さないでください。
-5. デプロイで得た `/exec` URL を OAuth クライアントの**承認済みリダイレクト URI**に登録します。同意画面のホームページとプライバシーポリシーには、自分のアプリとその `?page=privacy` ページを設定します。初回ログインとアカウント切り替えを確認してください。
+5. デプロイで得た `/exec` URL を OAuth クライアントの**承認済みリダイレクト URI**に登録します。次の**2つとも**登録してください。同意画面のホームページとプライバシーポリシーには、自分のアプリとその `?page=privacy` ページを設定します。初回ログインとアカウント切り替えを確認してください。
+   - `https://script.google.com/macros/s/<デプロイID>/exec`
+   - `https://script.google.com/a/~/macros/s/<デプロイID>/exec` （マニュアルに載る配布用URL。下記参照）
 6. `npm run manual` で自分のURL入り操作マニュアルを生成します。HTML・画像・PDF は Git 対象外の `docs/manual/` に置かれます。既存のデプロイを使う場合は `MANUAL_WEB_APP_URL='https://script.google.com/macros/s/<自分のID>/exec' npm run manual` でも更新できます。
 
 URL は Git 対象外の `tooling/deployment.json` に保存され、同じデプロイ ID を更新する限りマニュアルの URL は変わりません。新しいデプロイ ID を作った場合は、OAuth クライアントのリダイレクト URI とマニュアルを更新してください。
+
+### 配布用URLの形（複数アカウント対策）
+
+複数の Google アカウントでログインしているブラウザーでは、`https://script.google.com/macros/s/<ID>/exec` を開くと Google が `https://script.google.com/macros/u/<番号>/s/<ID>/exec` に切り替え、Webアプリではなくドライブの「ページが見つかりません／現在、ファイルを開くことができません。」が表示されます。`/a/~/` を挟んだ `https://script.google.com/a/~/macros/s/<ID>/exec` はアカウントに依存せず開けるため、`npm run manual` はこの形でリンクと QR コードを作ります。`ScriptApp.getService().getUrl()` は開いた側の形をそのまま返すため、短い形で開いたページからログインすると戻り先も短い形になり、直後に同じ書き換えで開けなくなります。これを避けるため、`src/app.html` の `accountAgnosticUrl()` がログインの `redirect_uri` を常に `/a/~/` 形式へ正規化します。古いリンクやブックマーク（短い形）から入ってもログイン後は `/a/~/` 形式に着地します。手順5で**両方**登録していないと、`エラー 400: redirect_uri_mismatch` になります。
 
 ## 利用時の注意
 
@@ -33,6 +39,7 @@ Apps Script の HTML Service は `googleusercontent.com` の iframe で動きま
 
 | コマンド | 用途 |
 | --- | --- |
+| `npm run setup -- --publisher "発行者名"` | Git 対象外のマニュアル発行者を設定 |
 | `npm run check` | GAS サーバー側コードの型検査 |
 | `npm run check:config` | Git 対象外の配信者設定を確認 |
 | `npm run gas:status` | GAS へのアップロード対象を確認 |
@@ -40,7 +47,7 @@ Apps Script の HTML Service は `googleusercontent.com` の iframe で動きま
 | `npm run gas:deploy` | 同じデプロイ ID で Web アプリを更新 |
 | `npm run manual` | 自分の URL の操作マニュアルを生成 |
 
-GAS ソースは `src/`、マニュアル原稿は `docs/manual-template/`、Node.js の補助スクリプトは `scripts/` です。開発・認証の詳細は [AGENTS.md](AGENTS.md) と [プロジェクト用スキル](.agents/skills/gas-project-dev/SKILL.md)にあります。`.local/`、`.clasp.json`、`src/LocalConfig.js`、`tooling/deployment.json`、生成済みマニュアルは公開しないでください。
+GAS ソースは `src/`、マニュアル原稿は `docs/manual-template/`、Node.js の補助スクリプトは `scripts/` です。開発・認証の詳細は [AGENTS.md](AGENTS.md) と [プロジェクト用スキル](.agents/skills/gas-project-dev/SKILL.md)にあります。`.local/`、`.clasp.json`、`src/LocalConfig.js`、`tooling/deployment.json`、`tooling/manual.json`、生成済みマニュアルは公開しないでください。`tooling/manual.json` の雛形は `tooling/manual.json.example` です。
 
 ## ライセンス
 

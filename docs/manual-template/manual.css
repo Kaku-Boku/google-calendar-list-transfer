@@ -30,7 +30,14 @@
 }
 
 /* ---------- 表紙面（1 ページ目） ---------- */
-@media print { .cover-page h2 { margin: 6mm 0 3mm; } .cover-page .flow, .cover-page .roles, .cover-page .access { margin-bottom: 5mm; } }
+/* 表紙面は目次まで 1 ページに収める（余白は本文面より詰める） */
+@media print {
+  .cover-page h2 { margin: 4.5mm 0 2.5mm; }
+  .cover-page .lead { margin-bottom: 2.5mm; }
+  .cover-page .cover-meta { margin-bottom: 3mm; }
+  .cover-page .flow, .cover-page .roles { margin-bottom: 4mm; }
+  .cover-page .access { margin: 4mm 0; padding: 3mm 4mm; }
+}
 .doc-id { font-family: var(--fm); font-size: 9pt; color: var(--sumi-2); margin: 0 0 3mm; letter-spacing: 0.04em; }
 .cover-page h1 { font-size: 28pt; }
 .cover-page .lead { color: var(--sumi); max-width: 38em; }

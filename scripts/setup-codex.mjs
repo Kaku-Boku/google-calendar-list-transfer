@@ -3,6 +3,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { configurePublisher } from './setup-local.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const script = join(root, 'scripts', 'clasp.mjs');
@@ -23,3 +24,4 @@ approval_mode = "auto"
 mkdirSync(join(root, '.codex'), { recursive: true });
 writeFileSync(join(root, '.codex', 'config.toml'), content, { mode: 0o600 });
 console.log('このチェックアウト専用の .codex/config.toml を生成しました。');
+await configurePublisher(process.argv.slice(2));

@@ -19,7 +19,7 @@
 <!-- 紙の表題欄（全ページ下端。Paged.js の running element） -->
 <div class="titleblock"><div class="titleblock__grid">
   <div><small>資料名</small><b>カレンダー一括登録 操作マニュアル</b></div>
-  <div><small>発行</small><b>配信者</b></div>
+  <div><small>発行</small><b>{{PUBLISHER}}</b></div>
   <div><small>版</small><span class="mono">v1.0 · 2026-09-20</span></div>
   <div><small>頁</small><span class="mono page"></span></div>
 </div></div>
@@ -43,7 +43,7 @@
       <div>
         <p class="access-label">アプリはここから開く</p>
         <a class="access-url" href="{{WEB_APP_URL}}" target="_blank" rel="noopener">{{WEB_APP_URL}}</a>
-        <p class="access-hint">Google Chrome で開いてください。ブックマークしておくと次回から探さずに済みます。スマートフォンでは右の QR コードを読み取ります。</p>
+        <p class="access-hint">Google Chrome で開いてください。ブックマークしておくと次回から探さずに済みます。スマートフォンでは右の QR コードを読み取ります。<b>URL はこのまま使ってください</b>（途中の <code>/a/~/</code> を省くと、複数の Google アカウントでログインしている人は開けません）。</p>
       </div>
       <div class="qr">{{WEB_APP_QR}}</div>
     </section>
@@ -313,7 +313,13 @@
         <p>そのカレンダーが<b>あなたに共有されていない</b>状態です。配布した人（またはカレンダーの管理者）に、Google カレンダー側であなたへの共有を依頼してください。共有されたら「失敗分を再試行」で登録できます。</p>
       </div>
       <div class="item">
-        <h3>「現在、ファイルを開くことができません」と出てアプリが開かない</h3>
+        <h3>「ページが見つかりません」「現在、ファイルを開くことができません。」と出てアプリが開かない</h3>
+        <p>アドレス欄を見てください。<code>/macros/<b>u/2/</b>s/…</code> のように <code>u/</code> と数字が入っていたら、<b>複数の Google アカウントでログインしている</b>ために Google がアカウントごとの URL に切り替えた状態です。アプリが壊れているわけではありません。</p>
+        <p>表紙の URL（<code>/a/~/macros/s/…</code> の形）をアドレス欄に貼り直すと、アカウントに関係なく開けます。<span class="sub">短い形の URL をブックマークしていると、また同じ画面に戻ることがあります。ブックマークも表紙の URL に入れ替えてください。</span></p>
+        <p>それでも開かないときは、<b>シークレット ウィンドウ</b>（Ctrl+Shift+N ／ ⌘+Shift+N）で開くか、ログインしている Google アカウントを 1 つにします。</p>
+      </div>
+      <div class="item">
+        <h3>「現在、ファイルを開くことができません」が Safari で出る</h3>
         <p><b>Safari</b> の場合：設定 → プライバシー →「サイト越えトラッキングを防ぐ」を一時的にオフにするか、<b>Chrome で開いて</b>ください。</p>
         <p><b>Chrome</b> でサードパーティ Cookie をすべてブロックしている場合：<code>script.google.com</code> と <code>googleusercontent.com</code> を許可します。</p>
       </div>
